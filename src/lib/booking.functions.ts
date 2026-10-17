@@ -47,5 +47,24 @@ export const createBooking = createServerFn({ method: "POST" })
       console.error(error);
       return { ok: false as const, error: "Could not save your booking. Please try again." };
     }
+
+    try {
+      const { sendBookingEmails } = await import("./email.server");
+      await sendBookingEmails({
+        bookingId: row.id,
+        patientName: data.fullName,
+        patientEmail: data.email,
+        patientPhone: data.phone,
+        serviceName: service.name,
+        appointmentType: data.appointmentType,
+        appointmentDate: data.date,
+        appointmentTime: data.time,
+        privateFee,
+        notes: data.notes || undefined,
+      });
+    } catch (emailErr) {
+      console.error("[createBooking] Email dispatch error:", emailErr);
+    }
+
     return { ok: true as const, id: row.id };
   });
