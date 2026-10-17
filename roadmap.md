@@ -1,0 +1,5 @@
+- [x] Add supplied GeSY logo and provider credential.
+- [x] Support coverage labels, optional private fees, and persisted appointment type.
+- [x] Verify both booking choices and saved requests.
+- [x] Drop session durations and clock icons from the services cards.
+- [x] Drop session durations and clock icons from the booking wizard cards and summary.
