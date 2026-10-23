@@ -7,12 +7,15 @@ interface NavbarProps {
 }
 
 export function Navbar({ onBookClick }: NavbarProps) {
+  const { doctor } = clinicConfig;
+  const brandName = doctor.logoTitle || doctor.name.replace(/^(Dr\.|Δρ\.)\s*/i, "");
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
       <div className="container mx-auto flex h-16 items-center justify-between px-6">
         <a href="#top" className="flex items-center gap-2 font-display text-xl text-foreground">
           <Stethoscope className="h-5 w-5 text-primary" />
-          <span>{clinicConfig.doctor.name}</span>
+          <span>{brandName}</span>
         </a>
         <nav className="hidden gap-8 text-sm text-muted-foreground md:flex">
           <a href="#services" className="transition-colors hover:text-foreground">

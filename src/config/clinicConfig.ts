@@ -38,6 +38,7 @@ export interface ClinicConfig {
   doctor: {
     name: string;
     prefix: string;
+    logoTitle?: string | undefined;
     specialty: string;
     specialtyGreek?: string | undefined;
     tagline: string;
@@ -103,6 +104,7 @@ export const clinicConfig: ClinicConfig = {
   doctor: {
     name: "Dr. Marinos Stylianou",
     prefix: "Dr.",
+    logoTitle: "Marinos Stylianou",
     specialty: "Physiotherapist (Φυσικοθεραπευτής)",
     specialtyGreek: "Φυσικοθεραπευτής",
     tagline: "Εξειδικευμένη Μυοσκελετική Αποκατάσταση & Φυσικοθεραπεία",
@@ -116,7 +118,9 @@ export const clinicConfig: ClinicConfig = {
       "Ο Δρ. Μαρίνος Στυλιανού είναι πτυχιούχος φυσικοθεραπευτής με εξειδίκευση στη μυοσκελετική αποκατάσταση, το Manual Therapy και την αθλητική φυσικοθεραπεία.",
       "Στο σύγχρονο κέντρο φυσικοθεραπείας στη Λεμεσό, παρέχει επιστημονικά τεκμηριωμένες θεραπείες, συνδυάζοντας εξειδικευμένες τεχνικές κινητοποίησης με στοχευμένη θεραπευτική άσκηση.",
     ],
-    avatarUrl: doctorAvatar,
+    avatarUrl:
+      (typeof process !== "undefined" && process.env?.["VITE_DOCTOR_AVATAR_URL"]) ||
+      doctorAvatar,
     avatarAlt: "Dr. Marinos Stylianou — Physiotherapist (Φυσικοθεραπευτής)",
     stats: {
       patientsTreated: "3,000+",
@@ -138,7 +142,7 @@ export const clinicConfig: ClinicConfig = {
     isProvider: true,
     badgeText: "Συμβεβλημένος Πάροχος ΓεΣΥ",
     subText: "Καλύπτεται με έγκυρο παραπεμπτικό",
-    logoUrl: gesyLogoAsset.url,
+    logoUrl: "/gesy-logo.svg",
     description:
       "Οι δικαιούχοι του Γενικού Συστήματος Υγείας (ΓεΣΥ) μπορούν να πραγματοποιήσουν τις συνεδρίες τους με έγκυρο παραπεμπτικό ειδικού ιατρού.",
     referralNotice: "Covered by GeSY (With Referral)",

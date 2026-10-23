@@ -1,6 +1,7 @@
 import { Award, CalendarCheck, ShieldCheck, Star, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clinicConfig } from "@/config/clinicConfig";
+import { GesyLogo } from "@/components/GesyLogo";
 
 interface HeroSectionProps {
   onBookClick: () => void;
@@ -57,12 +58,10 @@ export function HeroSection({ onBookClick }: HeroSectionProps) {
 
         {gesy.isProvider && (
           <div className="mt-5 inline-flex max-w-full items-center gap-3.5 rounded-xl border border-primary/25 bg-card px-4 py-3 shadow-xs">
-            <img
+            <GesyLogo
               src={gesy.logoUrl}
               alt="GeSY Logo"
-              width={56}
-              height={56}
-              className="h-12 w-12 shrink-0 object-contain"
+              className="h-12 w-12 shrink-0"
             />
             <div>
               <p className="text-sm font-semibold text-primary">{gesy.badgeText}</p>

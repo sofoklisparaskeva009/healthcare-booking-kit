@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" fill="none">
+  <defs>
+    <linearGradient id="gesyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#0e4e59"/>
+    </linearGradient>
+    <linearGradient id="crossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="160" height="160" rx="36" fill="url(#gesyBg)"/>
+  
+  <!-- Subtle inner border ring -->
+  <rect x="4" y="4" width="152" height="152" rx="32" stroke="#5eead4" stroke-opacity="0.25" stroke-width="2"/>
+
+  <!-- Healthcare Emblem: stylized ribbon cross with circular heart flow -->
+  <g transform="translate(80, 62)" filter="url(#shadow)">
+    <!-- Central Health Cross -->
+    <rect x="-10" y="-32" width="20" height="64" rx="10" fill="url(#crossGrad)"/>
+    <rect x="-32" y="-10" width="64" height="20" rx="10" fill="url(#crossGrad)"/>
+    <!-- Center heart/core circle -->
+    <circle cx="0" cy="0" r="8" fill="#ffffff" opacity="0.95"/>
+    <!-- Dynamic Care Arc -->
+    <path d="M -30 -4 C -28 -26, 28 -26, 30 -4" stroke="#ffffff" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+  </g>
+
+  <!-- Brand Typography: ΓεΣΥ -->
+  <g transform="translate(80, 126)" text-anchor="middle">
+    <text font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+          font-weight="900" 
+          font-size="28" 
+          letter-spacing="1.5" 
+          fill="#ffffff">
+      ΓεΣΥ
+    </text>
+    <text y="16" 
+          font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+          font-weight="600" 
+          font-size="8.5" 
+          letter-spacing="2" 
+          fill="#5eead4">
+      CYPRUS GHS
+    </text>
+  </g>
+</svg>
