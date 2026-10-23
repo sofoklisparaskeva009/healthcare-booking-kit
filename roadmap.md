@@ -3,3 +3,4 @@
 - [x] Verify both booking choices and saved requests.
 - [x] Drop session durations and clock icons from the services cards.
 - [x] Drop session durations and clock icons from the booking wizard cards and summary.
+- [x] Implement Google Calendar API server-side integration for completed bookings with graceful fallback.

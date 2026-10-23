@@ -66,5 +66,41 @@ export const createBooking = createServerFn({ method: "POST" })
       console.error("[createBooking] Email dispatch error:", emailErr);
     }
 
+    try {
+      const { createGoogleCalendarEvent } = await import("./googleCalendar.server");
+      await createGoogleCalendarEvent({
+        bookingId: row.id,
+        patientName: data.fullName,
+        patientEmail: data.email,
+        patientPhone: data.phone,
+        serviceName: service.name,
+        appointmentType: data.appointmentType,
+        appointmentDate: data.date,
+        appointmentTime: data.time,
+        durationMinutes: service.duration ?? 60,
+        privateFee,
+        notes: data.notes || undefined,
+      });
+    } catch (calErr) {
+      console.error("[createBooking] Google Calendar dispatch error:", calErr);
+    }
+
+    try {
+      const { sendBookingConfirmation } = await import("./messaging.server");
+      await sendBookingConfirmation({
+        bookingId: row.id,
+        patientName: data.fullName,
+        patientPhone: data.phone,
+        serviceName: service.name,
+        appointmentType: data.appointmentType,
+        appointmentDate: data.date,
+        appointmentTime: data.time,
+        privateFee,
+        locale: "el",
+      });
+    } catch (msgErr) {
+      console.error("[createBooking] Messaging dispatch error:", msgErr);
+    }
+
     return { ok: true as const, id: row.id };
   });
