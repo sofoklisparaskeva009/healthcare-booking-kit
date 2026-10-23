@@ -10,7 +10,7 @@ interface GesyLogoProps {
  * Renders the GeSY logo. If `src` fails to load (e.g. offline, 404, broken asset link),
  * it gracefully falls back to an authentic, crisp vector inline SVG.
  */
-export function GesyLogo({ className = "h-12 w-12 shrink-0", src = "/gesy-logo.svg", alt = "GeSY Logo" }: GesyLogoProps) {
+export function GesyLogo({ className = "h-12 w-12 shrink-0", src = "/gesy-logo.png", alt = "GeSY Logo" }: GesyLogoProps) {
   const [hasError, setHasError] = useState(false);
 
   if (hasError || !src) {
@@ -75,7 +75,7 @@ export function GesyLogo({ className = "h-12 w-12 shrink-0", src = "/gesy-logo.s
       alt={alt}
       width={56}
       height={56}
-      className={`${className} object-contain`}
+      className={`${className} object-contain rounded-md bg-white p-0.5 shadow-xs`}
       onError={() => setHasError(true)}
       loading="eager"
     />

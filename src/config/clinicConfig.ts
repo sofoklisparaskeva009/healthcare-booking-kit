@@ -142,7 +142,7 @@ export const clinicConfig: ClinicConfig = {
     isProvider: true,
     badgeText: "Συμβεβλημένος Πάροχος ΓεΣΥ",
     subText: "Καλύπτεται με έγκυρο παραπεμπτικό",
-    logoUrl: "/gesy-logo.svg",
+    logoUrl: "/gesy-logo.png",
     description:
       "Οι δικαιούχοι του Γενικού Συστήματος Υγείας (ΓεΣΥ) μπορούν να πραγματοποιήσουν τις συνεδρίες τους με έγκυρο παραπεμπτικό ειδικού ιατρού.",
     referralNotice: "Covered by GeSY (With Referral)",
