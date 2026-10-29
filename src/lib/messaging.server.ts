@@ -26,14 +26,82 @@ export interface MessagingResult {
   channel?: MessagingChannel;
   messageSid?: string;
   error?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface SendSmsOptions {
+  to: string;
+  body: string;
+  bookingId?: string;
+  from?: string;
+  messagingServiceSid?: string;
 }
 
 export interface MessagingCredentials {
   accountSid: string;
   authToken: string;
-  fromNumber: string; // E.164, e.g. +15551234567
+  fromNumber?: string; // E.164 (e.g. +35799123456) or Alphanumeric Sender ID
+  messagingServiceSid?: string; // Twilio Messaging Service SID (MG...)
   whatsappNumber?: string; // E.164 with whatsapp: prefix handled at call-site
   viberServiceId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Clean environment variable strings
+// ---------------------------------------------------------------------------
+
+function cleanEnv(val: string | undefined): string | undefined {
+  if (!val) return undefined;
+  const trimmed = val.trim().replace(/^["']|["']$/g, "").trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Phone number normalization (E.164 compliant)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalizes phone numbers to standard E.164 format.
+ * - Strips whitespace, dashes, dots, and parentheses.
+ * - Converts leading '00' to '+'.
+ * - If Cyprus 8-digit mobile/landline (e.g. 99xxxxxx), prepends +357 default country code.
+ * - Ensures the final number starts with '+'.
+ */
+export function normalizePhoneNumber(rawPhone: string, defaultCountryCode = "+357"): string {
+  if (!rawPhone) return "";
+  let cleaned = rawPhone.trim().replace(/[\s\-()[\].]/g, "");
+
+  if (cleaned.startsWith("00")) {
+    cleaned = `+${cleaned.slice(2)}`;
+  }
+
+  if (!cleaned.startsWith("+")) {
+    // 8-digit Cyprus number (starts with 9 for mobile, 2 for landline)
+    if (/^\d{8}$/.test(cleaned)) {
+      cleaned = `${defaultCountryCode}${cleaned}`;
+    } else if (cleaned.startsWith("357") && cleaned.length === 11) {
+      cleaned = `+${cleaned}`;
+    } else {
+      cleaned = `${defaultCountryCode}${cleaned}`;
+    }
+  }
+
+  return cleaned;
+}
+
+/**
+ * Normalizes the sender identifier (From number or alphanumeric sender).
+ */
+function normalizeSender(rawSender: string): string {
+  const cleaned = rawSender.trim().replace(/^["']|["']$/g, "").trim();
+  // If it's a Twilio Messaging Service SID (starts with MG), leave as-is
+  if (cleaned.startsWith("MG")) return cleaned;
+  // If it's an alphanumeric sender ID (letters only / alphanumeric without +)
+  if (/^[A-Za-z0-9]{2,11}$/.test(cleaned) && !/^\d+$/.test(cleaned)) {
+    return cleaned;
+  }
+  // If numeric or international phone number
+  return normalizePhoneNumber(cleaned);
 }
 
 // ---------------------------------------------------------------------------
@@ -41,33 +109,114 @@ export interface MessagingCredentials {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true if at least the minimum Twilio credentials are set.
+ * Parses Twilio credentials from environment variables.
+ * Supports multiple environment variable aliases commonly used across Vercel and Twilio:
+ * - Account SID: TWILIO_ACCOUNT_SID, TWILIO_SID
+ * - Auth Token:  TWILIO_AUTH_TOKEN, TWILIO_TOKEN
+ * - From / SMS:  TWILIO_PHONE_NUMBER, TWILIO_FROM_NUMBER, TWILIO_NUMBER, TWILIO_FROM, TWILIO_CALLER_ID
+ * - Messaging Service: TWILIO_MESSAGING_SERVICE_SID, TWILIO_SERVICE_SID
  */
-export function isMessagingConfigured(): boolean {
-  return Boolean(
-    process.env["TWILIO_ACCOUNT_SID"] &&
-      process.env["TWILIO_AUTH_TOKEN"] &&
-      process.env["TWILIO_FROM_NUMBER"],
-  );
+export function getMessagingCredentials(): MessagingCredentials | null {
+  const accountSid =
+    cleanEnv(process.env["TWILIO_ACCOUNT_SID"]) ||
+    cleanEnv(process.env["TWILIO_SID"]);
+
+  const authToken =
+    cleanEnv(process.env["TWILIO_AUTH_TOKEN"]) ||
+    cleanEnv(process.env["TWILIO_TOKEN"]);
+
+  const rawFromNumber =
+    cleanEnv(process.env["TWILIO_PHONE_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_FROM_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_FROM"]) ||
+    cleanEnv(process.env["TWILIO_CALLER_ID"]) ||
+    cleanEnv(process.env["TWILIO_SENDER_ID"]);
+
+  const rawServiceSid =
+    cleanEnv(process.env["TWILIO_MESSAGING_SERVICE_SID"]) ||
+    cleanEnv(process.env["TWILIO_SERVICE_SID"]);
+
+  // If sender starts with MG, it is a Messaging Service SID
+  let messagingServiceSid = rawServiceSid;
+  let fromNumber: string | undefined = undefined;
+
+  if (rawFromNumber) {
+    if (rawFromNumber.startsWith("MG")) {
+      messagingServiceSid = messagingServiceSid || rawFromNumber;
+    } else {
+      fromNumber = normalizeSender(rawFromNumber);
+    }
+  }
+
+  // Minimum required: accountSid, authToken, and (fromNumber OR messagingServiceSid)
+  if (!accountSid || !authToken || (!fromNumber && !messagingServiceSid)) {
+    return null;
+  }
+
+  const creds: MessagingCredentials = {
+    accountSid,
+    authToken,
+    ...(fromNumber ? { fromNumber } : {}),
+    ...(messagingServiceSid ? { messagingServiceSid } : {}),
+  };
+
+  const waNumber =
+    cleanEnv(process.env["TWILIO_WHATSAPP_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_WHATSAPP_FROM"]);
+  const viberSid =
+    cleanEnv(process.env["TWILIO_VIBER_SERVICE_SID"]) ||
+    cleanEnv(process.env["TWILIO_VIBER_SERVICE_ID"]);
+
+  if (waNumber) creds.whatsappNumber = normalizePhoneNumber(waNumber);
+  if (viberSid) creds.viberServiceId = viberSid;
+
+  return creds;
 }
 
 /**
- * Parses Twilio + optional channel credentials from env vars.
- * Returns null if required keys are absent.
+ * Returns true if the minimum Twilio credentials are set.
  */
-export function getMessagingCredentials(): MessagingCredentials | null {
-  const accountSid = process.env["TWILIO_ACCOUNT_SID"];
-  const authToken = process.env["TWILIO_AUTH_TOKEN"];
-  const fromNumber = process.env["TWILIO_FROM_NUMBER"];
+export function isMessagingConfigured(): boolean {
+  return getMessagingCredentials() !== null;
+}
 
-  if (!accountSid || !authToken || !fromNumber) return null;
+/**
+ * Logs diagnostic details when Twilio configuration is incomplete.
+ */
+function logConfigurationDiagnostics(context: string): void {
+  const detectedKeys: string[] = [];
+  const missingKeys: string[] = [];
 
-  const creds: MessagingCredentials = { accountSid, authToken, fromNumber };
-  const waNumber = process.env["TWILIO_WHATSAPP_NUMBER"];
-  const viberSid = process.env["TWILIO_VIBER_SERVICE_SID"];
-  if (waNumber) creds.whatsappNumber = waNumber;
-  if (viberSid) creds.viberServiceId = viberSid;
-  return creds;
+  const sid = cleanEnv(process.env["TWILIO_ACCOUNT_SID"]) || cleanEnv(process.env["TWILIO_SID"]);
+  if (sid) detectedKeys.push("Account SID (TWILIO_ACCOUNT_SID or TWILIO_SID)");
+  else missingKeys.push("TWILIO_ACCOUNT_SID (or TWILIO_SID)");
+
+  const token = cleanEnv(process.env["TWILIO_AUTH_TOKEN"]) || cleanEnv(process.env["TWILIO_TOKEN"]);
+  if (token) detectedKeys.push("Auth Token (TWILIO_AUTH_TOKEN or TWILIO_TOKEN)");
+  else missingKeys.push("TWILIO_AUTH_TOKEN (or TWILIO_TOKEN)");
+
+  const sender =
+    cleanEnv(process.env["TWILIO_PHONE_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_FROM_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_NUMBER"]) ||
+    cleanEnv(process.env["TWILIO_FROM"]) ||
+    cleanEnv(process.env["TWILIO_CALLER_ID"]) ||
+    cleanEnv(process.env["TWILIO_MESSAGING_SERVICE_SID"]) ||
+    cleanEnv(process.env["TWILIO_SERVICE_SID"]);
+
+  if (sender) {
+    detectedKeys.push("Sender Number/Service (TWILIO_PHONE_NUMBER / TWILIO_FROM_NUMBER / TWILIO_MESSAGING_SERVICE_SID)");
+  } else {
+    missingKeys.push("TWILIO_PHONE_NUMBER (or TWILIO_FROM_NUMBER / TWILIO_MESSAGING_SERVICE_SID)");
+  }
+
+  console.warn(
+    `[Messaging Service] ⚠️ ${context}: Twilio credentials are not configured. SMS dispatch skipped.\n` +
+      `  • Detected variables: [${detectedKeys.join(", ") || "none"}]\n` +
+      `  • Missing required: [${missingKeys.join(", ")}]\n` +
+      `  • Action: Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER (or TWILIO_FROM_NUMBER) in your Vercel Project Environment Variables.`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -77,15 +226,17 @@ export function getMessagingCredentials(): MessagingCredentials | null {
 /**
  * Constructs the HTTPS action URLs that patients click/reply to when they
  * tap Accept or Cancel. The webhook handler at
- * /api/messaging/webhook processes the incoming POST.
+ * /api/messaging/webhook processes the incoming POST or GET.
  */
 export function buildConfirmationUrls(
   bookingId: string,
 ): { confirmUrl: string; cancelUrl: string } {
   const base =
-    process.env["PUBLIC_BASE_URL"] ||
-    process.env["VITE_PUBLIC_URL"] ||
-    `https://${process.env["CF_PAGES_URL"] || "localhost:3000"}`;
+    cleanEnv(process.env["PUBLIC_BASE_URL"]) ||
+    cleanEnv(process.env["VITE_PUBLIC_URL"]) ||
+    (process.env["VERCEL_URL"] ? `https://${process.env["VERCEL_URL"].replace(/^https?:\/\//, "")}` : undefined) ||
+    `https://${cleanEnv(process.env["CF_PAGES_URL"]) || "localhost:3000"}`;
+
   return {
     confirmUrl: `${base}/api/messaging/webhook?action=confirm&bookingId=${encodeURIComponent(bookingId)}`,
     cancelUrl: `${base}/api/messaging/webhook?action=cancel&bookingId=${encodeURIComponent(bookingId)}`,
@@ -236,49 +387,172 @@ export function renderReminderMessage(
 }
 
 // ---------------------------------------------------------------------------
-// Twilio REST API helper (no SDK — avoids heavy Node-only dependencies)
+// Twilio REST API helper (Zero SDK dependencies — Edge & Serverless friendly)
 // ---------------------------------------------------------------------------
 
 /**
- * Sends a message via Twilio Messaging REST API.
- * Handles SMS, WhatsApp (whatsapp: prefix), and Viber (via Twilio Viber service).
+ * Sends a message via the official Twilio REST API.
+ * Handles SMS, WhatsApp, and Viber via form-encoded POST.
  */
 async function sendViaTwilio(
   credentials: MessagingCredentials,
   to: string,
-  from: string,
-  body: string,
+  from?: string,
+  body?: string,
   messagingServiceSid?: string,
 ): Promise<{ sid: string }> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
 
-  const formData = new URLSearchParams({ To: to, Body: body });
-  if (messagingServiceSid) {
-    formData.append("MessagingServiceSid", messagingServiceSid);
+  const formData = new URLSearchParams();
+  formData.append("To", to);
+  formData.append("Body", body || "");
+
+  const activeServiceSid = messagingServiceSid || credentials.messagingServiceSid;
+  const activeFrom = from || credentials.fromNumber;
+
+  if (activeServiceSid) {
+    formData.append("MessagingServiceSid", activeServiceSid);
+  } else if (activeFrom) {
+    formData.append("From", activeFrom);
   } else {
-    formData.append("From", from);
+    const errorMsg = "Neither 'From' phone number nor 'MessagingServiceSid' was provided for Twilio dispatch.";
+    console.error(`[Messaging Service] ❌ Configuration Error: ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
-  const basicAuth = btoa(`${credentials.accountSid}:${credentials.authToken}`);
+  const basicAuth =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(`${credentials.accountSid}:${credentials.authToken}`).toString("base64")
+      : btoa(`${credentials.accountSid}:${credentials.authToken}`);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
+  console.info(
+    `[Messaging Service] 📤 Dispatched Twilio request:\n` +
+      `  • Account SID: ${credentials.accountSid.slice(0, 6)}...${credentials.accountSid.slice(-4)}\n` +
+      `  • To: ${to}\n` +
+      `  • ${activeServiceSid ? `MessagingServiceSid: ${activeServiceSid}` : `From: ${activeFrom}`}\n` +
+      `  • Body Length: ${(body || "").length} chars`,
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formData.toString(),
+    });
+  } catch (networkErr) {
+    console.error("[Messaging Service] ❌ Network connection error contacting Twilio API:", networkErr);
+    throw networkErr;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
+    let errorJson: Record<string, unknown> | null = null;
+    try {
+      errorJson = JSON.parse(errorText);
+    } catch {
+      // Body was not JSON
+    }
+
+    const twilioCode = errorJson?.code as number | undefined;
+    const twilioMessage = (errorJson?.message as string) || errorText;
+    const twilioMoreInfo = (errorJson?.more_info as string) || "";
+
+    console.error(
+      `[Messaging Service] ❌ Twilio API Error Response (${response.status}):\n` +
+        `  • Error Code: ${twilioCode ?? "N/A"}\n` +
+        `  • Message: ${twilioMessage}\n` +
+        `  • More Info: ${twilioMoreInfo || "None"}\n` +
+        `  • Target Recipient: ${to}\n` +
+        `  • Sender: ${activeServiceSid ? `MessagingServiceSid (${activeServiceSid})` : activeFrom}\n` +
+        `  • Raw Twilio Response: ${errorText}`,
+    );
+
+    // Provide immediate actionable diagnostic guidance in Vercel logs:
+    if (twilioCode === 21608) {
+      console.error(
+        "[Messaging Service] 💡 Diagnosing Twilio Error 21608: Your Twilio account is in Trial mode. Trial accounts can ONLY send SMS to verified caller IDs. " +
+          `Verify '${to}' in your Twilio Console (https://twilio.com/console/phone-numbers/verified) or upgrade your Twilio account to send to all patients.`,
+      );
+    } else if (twilioCode === 21211) {
+      console.error(
+        `[Messaging Service] 💡 Diagnosing Twilio Error 21211: The recipient phone number '${to}' is invalid. Ensure it is in E.164 format (e.g. +35799123456).`,
+      );
+    } else if (twilioCode === 21606) {
+      console.error(
+        `[Messaging Service] 💡 Diagnosing Twilio Error 21606: The 'From' number '${activeFrom}' is not a valid Twilio phone number or is not SMS capable.`,
+      );
+    } else if (twilioCode === 20003) {
+      console.error(
+        "[Messaging Service] 💡 Diagnosing Twilio Error 20003: Twilio Authentication failed. Please verify TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Vercel.",
+      );
+    } else if (twilioCode === 63016 || twilioCode === 21617) {
+      console.error(
+        "[Messaging Service] 💡 Diagnosing Twilio WhatsApp Error: WhatsApp requires pre-approved templates for business-initiated conversations outside the 24h window.",
+      );
+    }
+
     throw new Error(
-      `Twilio API error (${response.status}): ${errorText}`,
+      `Twilio API error (${response.status}${twilioCode ? ` - Code ${twilioCode}` : ""}): ${twilioMessage}`,
     );
   }
 
   const result = (await response.json()) as { sid: string };
+  console.info(`[Messaging Service] ✅ Twilio message sent successfully (SID: ${result.sid}) to ${to}`);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Dedicated SMS Sender Function
+// ---------------------------------------------------------------------------
+
+/**
+ * Direct SMS sending function.
+ * Validates credentials, normalizes the recipient's phone number to E.164,
+ * and calls the Twilio REST API with full error logging.
+ */
+export async function sendSms(options: SendSmsOptions): Promise<MessagingResult> {
+  if (!isMessagingConfigured()) {
+    logConfigurationDiagnostics("sendSms");
+    return { ok: true, skipped: true };
+  }
+
+  const credentials = getMessagingCredentials();
+  if (!credentials) return { ok: true, skipped: true };
+
+  const phone = normalizePhoneNumber(options.to);
+  const activeFrom = options.from || credentials.fromNumber;
+  const activeServiceSid = options.messagingServiceSid || credentials.messagingServiceSid;
+
+  try {
+    const result = await sendViaTwilio(
+      credentials,
+      phone,
+      activeFrom,
+      options.body,
+      activeServiceSid,
+    );
+
+    return {
+      ok: true,
+      channel: "sms",
+      messageSid: result.sid,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[Messaging Service] ❌ sendSms failed for recipient ${phone}${options.bookingId ? ` (Booking #${options.bookingId})` : ""}:`,
+      err,
+    );
+    return {
+      ok: false,
+      channel: "sms",
+      error: message,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,17 +562,19 @@ async function sendViaTwilio(
 /**
  * Determines the best available channel from env config and sends the
  * booking confirmation message to the patient.
- * Priority: WhatsApp → SMS (Viber requires a separate Twilio Viber service).
+ *
+ * Resilient multi-channel routing:
+ * 1. If WhatsApp is configured, attempts WhatsApp first.
+ *    If WhatsApp fails (e.g. template required or unverified), it logs a warning
+ *    and automatically FALLS BACK to plain SMS so notifications are not lost.
+ * 2. If Viber is configured, attempts Viber.
+ * 3. Sends via standard SMS.
  */
 export async function sendBookingConfirmation(
   data: MessagingBookingData,
 ): Promise<MessagingResult> {
   if (!isMessagingConfigured()) {
-    console.info(
-      "[Messaging Service] Twilio credentials not configured. " +
-        "Messaging dispatch skipped. Define TWILIO_ACCOUNT_SID, " +
-        "TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER in .env to enable notifications.",
-    );
+    logConfigurationDiagnostics(`sendBookingConfirmation (Booking #${data.bookingId})`);
     return { ok: true, skipped: true };
   }
 
@@ -306,13 +582,13 @@ export async function sendBookingConfirmation(
   if (!credentials) return { ok: true, skipped: true };
 
   const { body } = renderBookingConfirmationMessage(data);
+  const phone = normalizePhoneNumber(data.patientPhone);
 
-  // Normalize phone to E.164 (basic best-effort)
-  const phone = data.patientPhone.replace(/\s+/g, "");
+  console.info(`[Messaging Service] 🚀 Processing booking confirmation for #${data.bookingId} (Recipient: ${phone})`);
 
-  try {
-    // 1. Try WhatsApp if configured
-    if (credentials.whatsappNumber) {
+  // 1. Try WhatsApp if configured
+  if (credentials.whatsappNumber) {
+    try {
       const result = await sendViaTwilio(
         credentials,
         `whatsapp:${phone}`,
@@ -320,13 +596,21 @@ export async function sendBookingConfirmation(
         body,
       );
       console.info(
-        `[Messaging Service] WhatsApp confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+        `[Messaging Service] ✅ WhatsApp confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
       );
       return { ok: true, channel: "whatsapp", messageSid: result.sid };
+    } catch (waErr) {
+      console.warn(
+        `[Messaging Service] ⚠️ WhatsApp delivery failed for #${data.bookingId}. Falling back to standard SMS:`,
+        waErr instanceof Error ? waErr.message : waErr,
+      );
+      // Fall through to SMS fallback below!
     }
+  }
 
-    // 2. Try Viber if service SID configured
-    if (credentials.viberServiceId) {
+  // 2. Try Viber if service SID configured
+  if (credentials.viberServiceId) {
+    try {
       const result = await sendViaTwilio(
         credentials,
         phone,
@@ -335,42 +619,49 @@ export async function sendBookingConfirmation(
         credentials.viberServiceId,
       );
       console.info(
-        `[Messaging Service] Viber confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+        `[Messaging Service] ✅ Viber confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
       );
       return { ok: true, channel: "viber", messageSid: result.sid };
+    } catch (viberErr) {
+      console.warn(
+        `[Messaging Service] ⚠️ Viber delivery failed for #${data.bookingId}. Falling back to standard SMS:`,
+        viberErr instanceof Error ? viberErr.message : viberErr,
+      );
+      // Fall through to SMS fallback below!
     }
+  }
 
-    // 3. Fallback to plain SMS
+  // 3. Primary / Fallback: Plain SMS
+  try {
     const result = await sendViaTwilio(
       credentials,
       phone,
       credentials.fromNumber,
       body,
+      credentials.messagingServiceSid,
     );
     console.info(
-      `[Messaging Service] SMS confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+      `[Messaging Service] ✅ SMS confirmation sent (SID: ${result.sid}) for booking #${data.bookingId}`,
     );
     return { ok: true, channel: "sms", messageSid: result.sid };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(
-      `[Messaging Service] Failed to send booking confirmation for #${data.bookingId}:`,
-      message,
+      `[Messaging Service] ❌ Failed to send booking confirmation for #${data.bookingId} to ${phone}:`,
+      err,
     );
-    return { ok: false, error: message };
+    return { ok: false, channel: "sms", error: message };
   }
 }
 
 /**
- * Sends a 24-hour reminder message to the patient.
+ * Sends a 24-hour reminder message to the patient with automatic SMS fallback.
  */
 export async function sendBookingReminder(
   data: MessagingBookingData,
 ): Promise<MessagingResult> {
   if (!isMessagingConfigured()) {
-    console.info(
-      "[Messaging Service] Twilio credentials not configured. Reminder skipped.",
-    );
+    logConfigurationDiagnostics(`sendBookingReminder (Booking #${data.bookingId})`);
     return { ok: true, skipped: true };
   }
 
@@ -378,10 +669,10 @@ export async function sendBookingReminder(
   if (!credentials) return { ok: true, skipped: true };
 
   const { body } = renderReminderMessage(data);
-  const phone = data.patientPhone.replace(/\s+/g, "");
+  const phone = normalizePhoneNumber(data.patientPhone);
 
-  try {
-    if (credentials.whatsappNumber) {
+  if (credentials.whatsappNumber) {
+    try {
       const result = await sendViaTwilio(
         credentials,
         `whatsapp:${phone}`,
@@ -389,12 +680,19 @@ export async function sendBookingReminder(
         body,
       );
       console.info(
-        `[Messaging Service] WhatsApp reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+        `[Messaging Service] ✅ WhatsApp reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
       );
       return { ok: true, channel: "whatsapp", messageSid: result.sid };
+    } catch (waErr) {
+      console.warn(
+        `[Messaging Service] ⚠️ WhatsApp reminder failed for #${data.bookingId}. Falling back to SMS:`,
+        waErr instanceof Error ? waErr.message : waErr,
+      );
     }
+  }
 
-    if (credentials.viberServiceId) {
+  if (credentials.viberServiceId) {
+    try {
       const result = await sendViaTwilio(
         credentials,
         phone,
@@ -403,27 +701,35 @@ export async function sendBookingReminder(
         credentials.viberServiceId,
       );
       console.info(
-        `[Messaging Service] Viber reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+        `[Messaging Service] ✅ Viber reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
       );
       return { ok: true, channel: "viber", messageSid: result.sid };
+    } catch (viberErr) {
+      console.warn(
+        `[Messaging Service] ⚠️ Viber reminder failed for #${data.bookingId}. Falling back to SMS:`,
+        viberErr instanceof Error ? viberErr.message : viberErr,
+      );
     }
+  }
 
+  try {
     const result = await sendViaTwilio(
       credentials,
       phone,
       credentials.fromNumber,
       body,
+      credentials.messagingServiceSid,
     );
     console.info(
-      `[Messaging Service] SMS reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
+      `[Messaging Service] ✅ SMS reminder sent (SID: ${result.sid}) for booking #${data.bookingId}`,
     );
     return { ok: true, channel: "sms", messageSid: result.sid };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(
-      `[Messaging Service] Failed to send reminder for #${data.bookingId}:`,
-      message,
+      `[Messaging Service] ❌ Failed to send reminder for #${data.bookingId} to ${phone}:`,
+      err,
     );
-    return { ok: false, error: message };
+    return { ok: false, channel: "sms", error: message };
   }
 }

@@ -101,7 +101,7 @@ export const createBooking = createServerFn({ method: "POST" })
 
     try {
       const { sendBookingConfirmation } = await import("./messaging.server");
-      await sendBookingConfirmation({
+      const msgResult = await sendBookingConfirmation({
         bookingId: row.id,
         patientName: data.fullName,
         patientPhone: data.phone,
@@ -112,8 +112,23 @@ export const createBooking = createServerFn({ method: "POST" })
         privateFee,
         locale: "el",
       });
+
+      if (!msgResult.ok) {
+        console.error(
+          `[createBooking] ⚠️ Twilio SMS / messaging confirmation failed for booking #${row.id}:`,
+          msgResult.error,
+        );
+      } else if (msgResult.skipped) {
+        console.info(
+          `[createBooking] ℹ️ Twilio SMS skipped for booking #${row.id} (credentials not configured in environment).`,
+        );
+      } else {
+        console.info(
+          `[createBooking] ✅ Twilio ${msgResult.channel?.toUpperCase() || "SMS"} confirmation dispatched for booking #${row.id} (SID: ${msgResult.messageSid})`,
+        );
+      }
     } catch (msgErr) {
-      console.error("[createBooking] Messaging dispatch error:", msgErr);
+      console.error("[createBooking] Unexpected messaging dispatch error:", msgErr);
     }
 
     return { ok: true as const, id: row.id };

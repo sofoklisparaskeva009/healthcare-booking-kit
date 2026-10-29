@@ -15,6 +15,8 @@ import {
   renderReminderMessage,
   sendBookingConfirmation,
   sendBookingReminder,
+  sendSms,
+  normalizePhoneNumber,
   type MessagingBookingData,
 } from "../lib/messaging.server";
 import {
@@ -54,13 +56,28 @@ const privateBooking: MessagingBookingData = {
 describe("Messaging Configuration", () => {
   const originalEnv = process.env;
 
+  const clearAllTwilioEnv = () => {
+    delete process.env["TWILIO_ACCOUNT_SID"];
+    delete process.env["TWILIO_SID"];
+    delete process.env["TWILIO_AUTH_TOKEN"];
+    delete process.env["TWILIO_TOKEN"];
+    delete process.env["TWILIO_FROM_NUMBER"];
+    delete process.env["TWILIO_PHONE_NUMBER"];
+    delete process.env["TWILIO_NUMBER"];
+    delete process.env["TWILIO_FROM"];
+    delete process.env["TWILIO_CALLER_ID"];
+    delete process.env["TWILIO_SENDER_ID"];
+    delete process.env["TWILIO_MESSAGING_SERVICE_SID"];
+    delete process.env["TWILIO_SERVICE_SID"];
+    delete process.env["TWILIO_WHATSAPP_NUMBER"];
+    delete process.env["TWILIO_WHATSAPP_FROM"];
+    delete process.env["TWILIO_VIBER_SERVICE_SID"];
+    delete process.env["TWILIO_VIBER_SERVICE_ID"];
+  };
+
   beforeEach(() => {
     process.env = { ...originalEnv };
-    delete process.env["TWILIO_ACCOUNT_SID"];
-    delete process.env["TWILIO_AUTH_TOKEN"];
-    delete process.env["TWILIO_FROM_NUMBER"];
-    delete process.env["TWILIO_WHATSAPP_NUMBER"];
-    delete process.env["TWILIO_VIBER_SERVICE_SID"];
+    clearAllTwilioEnv();
   });
 
   afterEach(() => {
@@ -77,6 +94,36 @@ describe("Messaging Configuration", () => {
     process.env["TWILIO_AUTH_TOKEN"] = "authtoken123";
     process.env["TWILIO_FROM_NUMBER"] = "+35725000000";
     expect(isMessagingConfigured()).toBe(true);
+  });
+
+  it("supports TWILIO_PHONE_NUMBER as an alias for TWILIO_FROM_NUMBER", () => {
+    process.env["TWILIO_ACCOUNT_SID"] = "ACtest123";
+    process.env["TWILIO_AUTH_TOKEN"] = "authtoken123";
+    process.env["TWILIO_PHONE_NUMBER"] = "+35799112233";
+    expect(isMessagingConfigured()).toBe(true);
+    const creds = getMessagingCredentials();
+    expect(creds).not.toBeNull();
+    expect(creds?.fromNumber).toBe("+35799112233");
+  });
+
+  it("supports TWILIO_SID, TWILIO_TOKEN, and TWILIO_NUMBER aliases", () => {
+    process.env["TWILIO_SID"] = "ACaliastest123";
+    process.env["TWILIO_TOKEN"] = "aliastoken123";
+    process.env["TWILIO_NUMBER"] = "+35799445566";
+    expect(isMessagingConfigured()).toBe(true);
+    const creds = getMessagingCredentials();
+    expect(creds?.accountSid).toBe("ACaliastest123");
+    expect(creds?.authToken).toBe("aliastoken123");
+    expect(creds?.fromNumber).toBe("+35799445566");
+  });
+
+  it("supports TWILIO_MESSAGING_SERVICE_SID instead of a phone number", () => {
+    process.env["TWILIO_ACCOUNT_SID"] = "ACtest123";
+    process.env["TWILIO_AUTH_TOKEN"] = "authtoken123";
+    process.env["TWILIO_MESSAGING_SERVICE_SID"] = "MG1234567890abcdef1234567890abcdef";
+    expect(isMessagingConfigured()).toBe(true);
+    const creds = getMessagingCredentials();
+    expect(creds?.messagingServiceSid).toBe("MG1234567890abcdef1234567890abcdef");
   });
 
   it("returns credentials with optional WhatsApp and Viber fields", () => {
@@ -97,6 +144,27 @@ describe("Messaging Configuration", () => {
     process.env["TWILIO_ACCOUNT_SID"] = "ACtest123";
     // Missing authToken and fromNumber
     expect(getMessagingCredentials()).toBeNull();
+  });
+});
+
+describe("normalizePhoneNumber", () => {
+  it("formats local 8-digit Cyprus mobile to E.164 +357", () => {
+    expect(normalizePhoneNumber("99123456")).toBe("+35799123456");
+    expect(normalizePhoneNumber("96 123 456")).toBe("+35796123456");
+  });
+
+  it("converts leading 00 to +", () => {
+    expect(normalizePhoneNumber("0035799123456")).toBe("+35799123456");
+    expect(normalizePhoneNumber("0030 6912345678")).toBe("+306912345678");
+  });
+
+  it("strips whitespace, dashes, dots, and parentheses", () => {
+    expect(normalizePhoneNumber("+357 (99) 12-34-56")).toBe("+35799123456");
+    expect(normalizePhoneNumber("+1 (555) 234-5678")).toBe("+15552345678");
+  });
+
+  it("preserves already valid E.164 numbers", () => {
+    expect(normalizePhoneNumber("+35799123456")).toBe("+35799123456");
   });
 });
 
@@ -342,6 +410,85 @@ describe("sendBookingConfirmation — WhatsApp channel", () => {
     const callArgs = fetchSpy.mock.calls[0]!;
     const bodyStr = (callArgs[1] as RequestInit).body as string;
     expect(bodyStr).toContain("whatsapp%3A");
+  });
+
+  it("falls back to plain SMS if WhatsApp delivery fails", async () => {
+    // 1st call (WhatsApp) rejects, 2nd call (SMS fallback) succeeds
+    fetchSpy
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ code: 63016, message: "WhatsApp message template required" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sid: "SMfallback-sms-002" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    const result = await sendBookingConfirmation(sampleBooking);
+    expect(result.ok).toBe(true);
+    expect(result.channel).toBe("sms");
+    expect(result.messageSid).toBe("SMfallback-sms-002");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("sendSms — dedicated sender function", () => {
+  const originalEnv = process.env;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env["TWILIO_ACCOUNT_SID"] = "ACfake123";
+    process.env["TWILIO_AUTH_TOKEN"] = "faketoken";
+    process.env["TWILIO_PHONE_NUMBER"] = "+35725000001";
+
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ sid: "SMdedicated-001" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+  });
+
+  it("sends SMS directly to normalized recipient", async () => {
+    const result = await sendSms({
+      to: "99123456",
+      body: "Test SMS content",
+      bookingId: "test-booking-id",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.channel).toBe("sms");
+    expect(result.messageSid).toBe("SMdedicated-001");
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const callArgs = fetchSpy.mock.calls[0]!;
+    const bodyStr = (callArgs[1] as RequestInit).body as string;
+    expect(bodyStr).toContain("To=%2B35799123456");
+    expect(bodyStr).toContain("Body=Test+SMS+content");
+  });
+
+  it("returns ok: true with skipped: true when unconfigured", async () => {
+    delete process.env["TWILIO_ACCOUNT_SID"];
+    delete process.env["TWILIO_PHONE_NUMBER"];
+
+    const result = await sendSms({
+      to: "+35799123456",
+      body: "Test unconfigured",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
