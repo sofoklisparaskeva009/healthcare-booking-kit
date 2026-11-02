@@ -5,14 +5,44 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
+/**
+ * Normalizes Supabase base URL:
+ * - Trims whitespace and quotes
+ * - Removes any accidental trailing slashes
+ * - Strips any /rest/v1 or /rest/v1/ suffix so PostgREST doesn't build /rest/v1/rest/v1/* (PGRST125)
+ */
+export function normalizeSupabaseUrl(rawUrl: string | undefined): string {
+  if (!rawUrl) return "";
+  let u = rawUrl.trim();
+  if ((u.startsWith('"') && u.endsWith('"')) || (u.startsWith("'") && u.endsWith("'"))) {
+    u = u.slice(1, -1).trim();
+  }
+  return u
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1\/?$/, "")
+    .replace(/\/+$/, "");
+}
+
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
 }
 
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
   return (input, init) => {
+    // Defensively prevent accidental duplicate /rest/v1/rest/v1/ paths from reaching PostgREST
+    let cleanInput = input;
+    if (typeof input === "string") {
+      cleanInput = input.replace("/rest/v1/rest/v1/", "/rest/v1/");
+    } else if (input instanceof URL) {
+      cleanInput = new URL(input.href.replace("/rest/v1/rest/v1/", "/rest/v1/"));
+    } else if (typeof Request !== "undefined" && input instanceof Request) {
+      if (input.url.includes("/rest/v1/rest/v1/")) {
+        cleanInput = new Request(input.url.replace("/rest/v1/rest/v1/", "/rest/v1/"), input);
+      }
+    }
+
     const headers = new Headers(
-      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
+      typeof Request !== "undefined" && cleanInput instanceof Request ? cleanInput.headers : undefined,
     );
 
     if (init?.headers) {
@@ -28,13 +58,21 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     headers.set("apikey", supabaseKey);
-    return fetch(input, { ...init, headers });
+    return fetch(cleanInput, { ...init, headers });
   };
 }
 
 function createSupabaseAdminClient() {
-  const SUPABASE_URL = process.env["SUPABASE_URL"];
-  const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const rawUrl = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"];
+  const SUPABASE_URL = normalizeSupabaseUrl(rawUrl);
+
+  const SUPABASE_SERVICE_ROLE_KEY =
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] ||
+    process.env["SUPABASE_SERVICE_KEY"] ||
+    process.env["SERVICE_ROLE_KEY"] ||
+    // Fallback for development if service role key is not yet set locally:
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [
@@ -44,6 +82,16 @@ function createSupabaseAdminClient() {
     const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud.`;
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
+  }
+
+  if (
+    !process.env["SUPABASE_SERVICE_ROLE_KEY"] &&
+    !process.env["SUPABASE_SERVICE_KEY"] &&
+    !process.env["SERVICE_ROLE_KEY"]
+  ) {
+    console.warn(
+      "[Supabase Admin] Warning: SUPABASE_SERVICE_ROLE_KEY is not configured in environment. Using publishable key fallback.",
+    );
   }
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {

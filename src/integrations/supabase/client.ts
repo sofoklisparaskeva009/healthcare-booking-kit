@@ -7,10 +7,22 @@ function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
 }
 
+function normalizeSupabaseUrl(rawUrl: string | undefined): string {
+  if (!rawUrl) return "";
+  let u = rawUrl.trim();
+  if ((u.startsWith('"') && u.endsWith('"')) || (u.startsWith("'") && u.endsWith("'"))) {
+    u = u.slice(1, -1).trim();
+  }
+  return u
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1\/?$/, "")
+    .replace(/\/+$/, "");
+}
+
 // The public URL can be reachable only from the browser, so server requests go to the runtime URL of the same backend.
 function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | undefined {
   if (typeof window !== "undefined" || typeof process === "undefined") return undefined;
-  const serverUrl = process.env["SUPABASE_URL"]?.replace(/\/+$/, "");
+  const serverUrl = normalizeSupabaseUrl(process.env["SUPABASE_URL"]);
   if (
     !serverUrl ||
     serverUrl === publicUrl ||
@@ -21,11 +33,23 @@ function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | und
 }
 
 function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof fetch {
-  const publicUrl = supabaseUrl.replace(/\/+$/, "");
+  const publicUrl = normalizeSupabaseUrl(supabaseUrl);
   const serverUrl = serverSupabaseUrl(publicUrl, supabaseKey);
   return (input, init) => {
+    // Defensively prevent accidental duplicate /rest/v1/rest/v1/ paths from reaching PostgREST
+    let cleanInput = input;
+    if (typeof input === "string") {
+      cleanInput = input.replace("/rest/v1/rest/v1/", "/rest/v1/");
+    } else if (input instanceof URL) {
+      cleanInput = new URL(input.href.replace("/rest/v1/rest/v1/", "/rest/v1/"));
+    } else if (typeof Request !== "undefined" && input instanceof Request) {
+      if (input.url.includes("/rest/v1/rest/v1/")) {
+        cleanInput = new Request(input.url.replace("/rest/v1/rest/v1/", "/rest/v1/"), input);
+      }
+    }
+
     const headers = new Headers(
-      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
+      typeof Request !== "undefined" && cleanInput instanceof Request ? cleanInput.headers : undefined,
     );
 
     if (init?.headers) {
@@ -42,22 +66,30 @@ function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof f
 
     headers.set("apikey", supabaseKey);
     if (serverUrl) {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url =
+        typeof cleanInput === "string"
+          ? cleanInput
+          : cleanInput instanceof URL
+            ? cleanInput.href
+            : cleanInput.url;
       if (url.startsWith(`${publicUrl}/`)) {
         const target = serverUrl + url.slice(publicUrl.length);
         const request =
-          typeof input === "string" || input instanceof URL ? target : new Request(target, input);
+          typeof cleanInput === "string" || cleanInput instanceof URL
+            ? target
+            : new Request(target, cleanInput);
         return fetch(request, { ...init, headers });
       }
     }
-    return fetch(input, { ...init, headers });
+    return fetch(cleanInput, { ...init, headers });
   };
 }
 
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"];
+  const rawUrl = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"];
+  const SUPABASE_URL = normalizeSupabaseUrl(rawUrl);
   const SUPABASE_PUBLISHABLE_KEY =
     import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_PUBLISHABLE_KEY"];
 

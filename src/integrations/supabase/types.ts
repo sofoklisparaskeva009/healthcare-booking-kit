@@ -18,10 +18,13 @@ export type Database = {
           full_name: string;
           id: string;
           notes: string | null;
+          patient_cancelled_at: string | null;
+          patient_confirmed_at: string | null;
           phone: string;
           price_eur: number;
           private_fee_eur: number | null;
           service: string;
+          status: string;
         };
         Insert: {
           appointment_date: string;
@@ -32,10 +35,13 @@ export type Database = {
           full_name: string;
           id?: string;
           notes?: string | null;
+          patient_cancelled_at?: string | null;
+          patient_confirmed_at?: string | null;
           phone: string;
           price_eur: number;
           private_fee_eur?: number | null;
           service: string;
+          status?: string;
         };
         Update: {
           appointment_date?: string;
@@ -46,10 +52,67 @@ export type Database = {
           full_name?: string;
           id?: string;
           notes?: string | null;
+          patient_cancelled_at?: string | null;
+          patient_confirmed_at?: string | null;
           phone?: string;
           price_eur?: number;
           private_fee_eur?: number | null;
           service?: string;
+          status?: string;
+        };
+        Relationships: [];
+      };
+      bookings: {
+        Row: {
+          appointment_date: string;
+          appointment_time: string;
+          appointment_type: string;
+          created_at: string;
+          email: string;
+          full_name: string;
+          id: string;
+          notes: string | null;
+          patient_cancelled_at: string | null;
+          patient_confirmed_at: string | null;
+          phone: string;
+          price_eur: number;
+          private_fee_eur: number | null;
+          service: string;
+          status: string;
+        };
+        Insert: {
+          appointment_date: string;
+          appointment_time: string;
+          appointment_type?: string;
+          created_at?: string;
+          email: string;
+          full_name: string;
+          id?: string;
+          notes?: string | null;
+          patient_cancelled_at?: string | null;
+          patient_confirmed_at?: string | null;
+          phone: string;
+          price_eur: number;
+          private_fee_eur?: number | null;
+          service: string;
+          status?: string;
+        };
+        Update: {
+          appointment_date?: string;
+          appointment_time?: string;
+          appointment_type?: string;
+          created_at?: string;
+          email?: string;
+          full_name?: string;
+          id?: string;
+          notes?: string | null;
+          patient_cancelled_at?: string | null;
+          patient_confirmed_at?: string | null;
+          phone?: string;
+          price_eur?: number;
+          private_fee_eur?: number | null;
+          service?: string;
+          status?: string;
         };
         Relationships: [];
       };

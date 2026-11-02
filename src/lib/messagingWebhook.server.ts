@@ -149,17 +149,22 @@ export async function handleMessagingWebhook(
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Fetch current booking to verify it exists.
-    // status / patient_confirmed_at / patient_cancelled_at are runtime DB columns
-    // not yet reflected in the auto-generated types.ts — use unknown cast.
+    // Try booking_requests, and fallback to bookings if PGRST125 is encountered.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: booking, error: fetchError } = (await (
-      supabaseAdmin
-        .from("booking_requests")
-        .select("id, status") as any
-    ).eq("id", bookingId).single()) as {
-      data: { id: string; status?: string } | null;
-      error: unknown;
-    };
+    let targetTable = "booking_requests";
+    let fetchRes = await (supabaseAdmin.from(targetTable as any).select("id, status") as any)
+      .eq("id", bookingId)
+      .single();
+
+    if (fetchRes.error?.code === "PGRST125") {
+      targetTable = "bookings";
+      fetchRes = await (supabaseAdmin.from(targetTable as any).select("id, status") as any)
+        .eq("id", bookingId)
+        .single();
+    }
+
+    const booking = fetchRes.data as { id: string; status?: string } | null;
+    const fetchError = fetchRes.error;
 
     if (fetchError || !booking) {
       console.warn(`[Messaging Webhook] Booking #${bookingId} not found`);
@@ -194,7 +199,7 @@ export async function handleMessagingWebhook(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = (await (
       supabaseAdmin
-        .from("booking_requests")
+        .from(targetTable as any)
         .update(updatePayload as any) as any
     ).eq("id", bookingId)) as { error: unknown };
 
