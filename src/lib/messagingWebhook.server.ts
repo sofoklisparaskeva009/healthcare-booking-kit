@@ -197,11 +197,24 @@ export async function handleMessagingWebhook(
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = (await (
+    let { error: updateError } = (await (
       supabaseAdmin
         .from(targetTable as any)
         .update(updatePayload as any) as any
-    ).eq("id", bookingId)) as { error: unknown };
+    ).eq("id", bookingId)) as { error: any };
+
+    // Fallback if timestamp column is not yet present in schema cache (PGRST204)
+    if (updateError?.code === "PGRST204") {
+      console.warn(
+        `[Messaging Webhook] Table '${targetTable}' missing timestamp column (PGRST204). Updating status only...`,
+      );
+      const retry = await (
+        supabaseAdmin
+          .from(targetTable as any)
+          .update({ status: newStatus } as any) as any
+      ).eq("id", bookingId);
+      updateError = retry.error;
+    }
 
     if (updateError) {
       console.error(
