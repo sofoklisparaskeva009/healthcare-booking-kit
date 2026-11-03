@@ -41,54 +41,65 @@ export async function sendBookingEmails(data: BookingEmailData) {
   const patientTemplate = renderPatientConfirmationEmail(data);
   const clinicTemplate = renderClinicNotificationEmail(data);
 
-  const results = await Promise.allSettled([
-    resend.emails.send({
+  // Send both emails independently — a failure in one must not block the other.
+  let patientEmailStatus: "sent" | "failed" = "failed";
+  let clinicEmailStatus: "sent" | "failed" = "failed";
+
+  try {
+    const patientResult = await resend.emails.send({
       from: fromEmail,
       to: [data.patientEmail],
       subject: patientTemplate.subject,
       text: patientTemplate.text,
       html: patientTemplate.html,
-    }),
-    resend.emails.send({
+    });
+    if (patientResult.error) {
+      console.error(
+        `[Resend Email Service] ❌ Patient confirmation email rejected by Resend API (booking #${data.bookingId}):`,
+        patientResult.error,
+      );
+    } else {
+      console.info(
+        `[Resend Email Service] ✅ Patient confirmation email sent (id: ${patientResult.data?.id}) to ${data.patientEmail}`,
+      );
+      patientEmailStatus = "sent";
+    }
+  } catch (err) {
+    console.error(
+      `[Resend Email Service] ❌ Unexpected error sending patient confirmation email (booking #${data.bookingId}):`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  try {
+    const clinicResult = await resend.emails.send({
       from: fromEmail,
       to: [clinicRecipient],
       subject: clinicTemplate.subject,
       text: clinicTemplate.text,
       html: clinicTemplate.html,
-    }),
-  ]);
-
-  const [patientResult, clinicResult] = results;
-
-  if (patientResult.status === "rejected") {
+    });
+    if (clinicResult.error) {
+      console.error(
+        `[Resend Email Service] ❌ Clinic notification email rejected by Resend API (booking #${data.bookingId}):`,
+        clinicResult.error,
+      );
+    } else {
+      console.info(
+        `[Resend Email Service] ✅ Clinic notification email sent (id: ${clinicResult.data?.id}) to ${clinicRecipient}`,
+      );
+      clinicEmailStatus = "sent";
+    }
+  } catch (err) {
     console.error(
-      "[Resend Email Service] Failed to send patient confirmation email:",
-      patientResult.reason,
-    );
-  } else if (patientResult.value.error) {
-    console.error(
-      "[Resend Email Service] Resend error for patient email:",
-      patientResult.value.error,
-    );
-  }
-
-  if (clinicResult.status === "rejected") {
-    console.error(
-      "[Resend Email Service] Failed to send clinic notification email:",
-      clinicResult.reason,
-    );
-  } else if (clinicResult.value.error) {
-    console.error(
-      "[Resend Email Service] Resend error for clinic email:",
-      clinicResult.value.error,
+      `[Resend Email Service] ❌ Unexpected error sending clinic notification email (booking #${data.bookingId}):`,
+      err instanceof Error ? err.message : err,
     );
   }
 
   return {
     ok: true,
-    patientEmailStatus:
-      patientResult.status === "fulfilled" && !patientResult.value.error ? "sent" : "failed",
-    clinicEmailStatus:
-      clinicResult.status === "fulfilled" && !clinicResult.value.error ? "sent" : "failed",
+    patientEmailStatus,
+    clinicEmailStatus,
   };
 }

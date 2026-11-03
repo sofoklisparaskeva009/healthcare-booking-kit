@@ -489,6 +489,22 @@ async function sendViaTwilio(
       console.error(
         "[Messaging Service] 💡 Diagnosing Twilio Error 20003: Twilio Authentication failed. Please verify TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Vercel.",
       );
+    } else if (twilioCode === 20005) {
+      console.error(
+        "[Messaging Service] 💡 Diagnosing Twilio Error 20005: Account not authorized to send to this destination. " +
+          "For Cyprus (+357) numbers, your Twilio account must complete Trust Hub KYC registration. " +
+          "Go to: https://console.twilio.com/us1/trusthub and submit your business profile.",
+      );
+    } else if (twilioCode === 21408) {
+      console.error(
+        `[Messaging Service] 💡 Diagnosing Twilio Error 21408: Geographic permission not enabled for recipient country. ` +
+          `Enable messaging to Cyprus (CY) at: https://console.twilio.com/us1/develop/sms/settings/geo-permissions`,
+      );
+    } else if (twilioCode === 30034) {
+      console.error(
+        "[Messaging Service] 💡 Diagnosing Twilio Error 30034: Message blocked by Twilio's risk engine (STOP filter or carrier block). " +
+          "The recipient may have previously replied STOP. Check Twilio Console → Messaging → Logs for opt-out status.",
+      );
     } else if (twilioCode === 63016 || twilioCode === 21617) {
       console.error(
         "[Messaging Service] 💡 Diagnosing Twilio WhatsApp Error: WhatsApp requires pre-approved templates for business-initiated conversations outside the 24h window.",
