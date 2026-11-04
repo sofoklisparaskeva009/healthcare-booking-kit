@@ -34,6 +34,30 @@ export interface TrustBadge {
   iconName: "Award" | "ShieldCheck" | "Star" | "Stethoscope";
 }
 
+/**
+ * Optional per-locale overrides for clinic content. The base values in
+ * `clinicConfig` are Greek (default locale); any field omitted here falls
+ * back to the Greek base value.
+ */
+export interface ClinicLocalizedContent {
+  specialty?: string;
+  tagline?: string;
+  heroHeading?: { regular: string; highlight: string };
+  heroDescription?: string;
+  bioParagraphs?: string[];
+  avatarAlt?: string;
+  statCards?: Array<{ value: string; label: string }>;
+  trustBadges?: TrustBadge[];
+  gesy?: Partial<Pick<ClinicConfig["gesy"], "badgeText" | "subText" | "description" | "referralNotice">>;
+  /** Keyed by service id. */
+  services?: Record<string, Partial<Pick<ClinicService, "title" | "description" | "gesyCoverageNote">>>;
+  workingHours?: WorkingHours[];
+  emergencyNote?: string;
+  accessibilityNote?: string;
+  testimonials?: Testimonial[];
+  faqs?: FAQ[];
+}
+
 export interface ClinicConfig {
   doctor: {
     name: string;
@@ -98,6 +122,10 @@ export interface ClinicConfig {
     primaryColor: string;
     goldColor: string;
   };
+  /** English (and future locale) overrides for the Greek base content. */
+  translations?: {
+    en?: ClinicLocalizedContent;
+  };
 }
 
 export const clinicConfig: ClinicConfig = {
@@ -145,7 +173,7 @@ export const clinicConfig: ClinicConfig = {
     logoUrl: "/gesy-logo.png",
     description:
       "Οι δικαιούχοι του Γενικού Συστήματος Υγείας (ΓεΣΥ) μπορούν να πραγματοποιήσουν τις συνεδρίες τους με έγκυρο παραπεμπτικό ειδικού ιατρού.",
-    referralNotice: "Covered by GeSY (With Referral)",
+    referralNotice: "Καλύπτεται από ΓεΣΥ (GeSY) με παραπεμπτικό",
   },
   services: [
     {
@@ -154,7 +182,7 @@ export const clinicConfig: ClinicConfig = {
       description:
         "Ολοκληρωμένη κλινική αξιολόγηση, λήψη ιστορικού, εμβιομηχανικός έλεγχος και σχεδιασμός εξατομικευμένου πλάνου αποκατάστασης.",
       isGesyCovered: true,
-      gesyCoverageNote: "Covered by GeSY (With Referral)",
+      gesyCoverageNote: "Καλύπτεται από ΓεΣΥ (GeSY) με παραπεμπτικό",
       featured: true,
     },
     {
@@ -163,7 +191,7 @@ export const clinicConfig: ClinicConfig = {
       description:
         "Εξατομικευμένη κινησιοθεραπεία, νευρομυϊκή επανεκπαίδευση, θεραπευτική ενδυνάμωση και συνεχής αξιολόγηση της αποκατάστασης.",
       isGesyCovered: true,
-      gesyCoverageNote: "Covered by GeSY (With Referral)",
+      gesyCoverageNote: "Καλύπτεται από ΓεΣΥ (GeSY) με παραπεμπτικό",
     },
     {
       id: "manual-therapy",
@@ -257,5 +285,105 @@ export const clinicConfig: ClinicConfig = {
     accentColor: "oklch(0.95 0.02 170)",
     primaryColor: "oklch(0.38 0.08 170)",
     goldColor: "oklch(0.74 0.11 80)",
+  },
+  translations: {
+    en: {
+      specialty: "Physiotherapist",
+      tagline: "Specialised Musculoskeletal Rehabilitation & Physiotherapy",
+      heroHeading: {
+        regular: "Specialised Musculoskeletal Rehabilitation &",
+        highlight: "Physiotherapy.",
+      },
+      heroDescription:
+        "Personalised clinical care, manual therapy and modern rehabilitation for musculoskeletal pain, sports injuries and post-operative strengthening in Limassol.",
+      bioParagraphs: [
+        "Dr. Marinos Stylianou is a licensed physiotherapist specialising in musculoskeletal rehabilitation, Manual Therapy and sports physiotherapy.",
+        "At his modern physiotherapy clinic in Limassol he delivers evidence-based treatment, combining specialised mobilisation techniques with targeted therapeutic exercise.",
+      ],
+      avatarAlt: "Dr. Marinos Stylianou — Physiotherapist",
+      statCards: [
+        { value: "12+", label: "Years of Experience" },
+        { value: "MSc", label: "Sports Rehab" },
+        { value: "GeSY", label: "Contracted Provider" },
+      ],
+      trustBadges: [
+        { label: "12+ Years of Experience", iconName: "Award" },
+        { label: "GeSY Contracted Provider", iconName: "ShieldCheck" },
+        { label: "4.9 Patient Rating", iconName: "Star" },
+      ],
+      gesy: {
+        badgeText: "Contracted GeSY Provider",
+        subText: "Covered with a valid referral",
+        description:
+          "Beneficiaries of the General Healthcare System (GeSY) can attend their sessions with a valid referral from a specialist physician.",
+        referralNotice: "Covered by GeSY (With Referral)",
+      },
+      services: {
+        initial: {
+          title: "Initial Assessment & Musculoskeletal Screening",
+          description:
+            "Comprehensive clinical evaluation, history taking, biomechanical screening and a personalised rehabilitation plan.",
+          gesyCoverageNote: "Covered by GeSY (With Referral)",
+        },
+        rehabilitation: {
+          title: "Physiotherapy Session / Rehabilitation",
+          description:
+            "Personalised exercise therapy, neuromuscular re-education, therapeutic strengthening and continuous progress assessment.",
+          gesyCoverageNote: "Covered by GeSY (With Referral)",
+        },
+        "manual-therapy": {
+          title: "Specialised Treatment / Manual Therapy",
+          description:
+            "Specialised soft-tissue and joint mobilisation techniques, myofascial release and fast relief from chronic pain.",
+        },
+      },
+      workingHours: [
+        { days: "Monday – Friday", hours: "08:30 – 19:30", isOpen: true },
+        { days: "Saturday", hours: "09:00 – 13:00", isOpen: true },
+        { days: "Sunday", hours: "Closed", isOpen: false },
+      ],
+      emergencyNote:
+        "For out-of-hours emergencies, please contact the nearest hospital.",
+      accessibilityNote:
+        "Fully accessible clinic with a lift and dedicated patient parking.",
+      testimonials: [
+        {
+          name: "Kostas Nikolaou",
+          treatment: "Musculoskeletal Rehabilitation",
+          text: "After months of lower back pain, Mr. Stylianou's treatment plan gave me my daily life back. An outstanding professional.",
+          rating: 5,
+        },
+        {
+          name: "Eleni Papadopoulou",
+          treatment: "Sports Shoulder Injury",
+          text: "Targeted treatment and genuine follow-up. I returned to training faster and completely safely.",
+          rating: 5,
+        },
+        {
+          name: "Michalis Georgiou",
+          treatment: "Post-operative Knee Rehabilitation",
+          text: "His kindness, patience and up-to-date knowledge made my rehabilitation a complete success.",
+          rating: 5,
+        },
+      ],
+      faqs: [
+        {
+          q: "Do I need a referral for GeSY-covered sessions?",
+          a: "Yes. GeSY coverage for physiotherapy requires an active referral from your personal or specialist physician.",
+        },
+        {
+          q: "Can I book privately without a referral?",
+          a: "Of course. You can schedule a private session or Manual Therapy directly online without a referral.",
+        },
+        {
+          q: "What should I bring to my first visit?",
+          a: "Please bring your ID / GeSY number, any recent imaging (MRI, X-ray) and comfortable clothing.",
+        },
+        {
+          q: "How can I change or cancel my appointment?",
+          a: "Contact us by phone or email at least 24 hours before your appointment so we can offer the slot to another patient.",
+        },
+      ],
+    },
   },
 };

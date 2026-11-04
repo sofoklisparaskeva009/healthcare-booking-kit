@@ -20,44 +20,67 @@ describe("Email Templates", () => {
     notes: "Persistent knee pain after running.",
   };
 
-  it("renders patient confirmation email with dynamic clinic config data", () => {
+  it("renders Greek patient confirmation email by default (locale: el)", () => {
     const email = renderPatientConfirmationEmail(sampleData);
+    expect(email.subject).toContain("Επιβεβαίωση Ραντεβού");
     expect(email.subject).toContain(clinicConfig.doctor.name);
-    expect(email.text).toContain(clinicConfig.doctor.name);
-    expect(email.text).toContain("Andreas Dimitriou");
+    expect(email.text).toContain("Αγαπητέ/ή Andreas Dimitriou");
     expect(email.text).toContain("Initial Consultation");
     expect(email.text).toContain("10:00");
     expect(email.text).toContain(clinicConfig.contact.address.full);
+    expect(email.html).toContain('lang="el"');
     expect(email.html).toContain(clinicConfig.doctor.name);
-    expect(email.html).toContain(clinicConfig.doctor.specialty);
+    expect(email.html).toContain("ΓεΣΥ");
+  });
+
+  it("renders English patient confirmation email when locale is 'en'", () => {
+    const email = renderPatientConfirmationEmail({ ...sampleData, locale: "en" });
+    expect(email.subject).toContain("Appointment Confirmation");
+    expect(email.subject).toContain(clinicConfig.doctor.name);
+    expect(email.text).toContain("Dear Andreas Dimitriou");
+    expect(email.text).toContain("Initial Consultation");
+    expect(email.text).toContain("10:00");
+    expect(email.html).toContain('lang="en"');
     expect(email.html).toContain("GeSY");
   });
 
-  it("renders clinic notification email with patient details and notes", () => {
-    const email = renderClinicNotificationEmail(sampleData);
+  it("renders clinic notification email with patient details, notes, and preferred language", () => {
+    const email = renderClinicNotificationEmail({ ...sampleData, locale: "en" });
     expect(email.subject).toContain("Andreas Dimitriou");
     expect(email.subject).toContain("Initial Consultation");
     expect(email.text).toContain("Andreas Dimitriou");
     expect(email.text).toContain("+357 99 887766");
     expect(email.text).toContain("andreas@example.com");
+    expect(email.text).toContain("Preferred language: English");
     expect(email.text).toContain("Persistent knee pain after running.");
     expect(email.html).toContain("Andreas Dimitriou");
     expect(email.html).toContain("Persistent knee pain after running.");
   });
 
-  it("renders private appointment details correctly when private fee is supplied", () => {
-    const privateData: BookingEmailData = {
+  it("renders private appointment details correctly in both Greek and English when private fee is supplied", () => {
+    const privateDataEl: BookingEmailData = {
       ...sampleData,
       appointmentType: "private",
       privateFee: 60,
+      locale: "el",
     };
 
-    const patientEmail = renderPatientConfirmationEmail(privateData);
-    expect(patientEmail.text).toContain("Private Visit");
-    expect(patientEmail.text).toContain("€60");
-    expect(patientEmail.html).toContain("€60");
+    const patientEmailEl = renderPatientConfirmationEmail(privateDataEl);
+    expect(patientEmailEl.text).toContain("Ιδιωτική Επίσκεψη");
+    expect(patientEmailEl.text).toContain("€60");
+    expect(patientEmailEl.html).toContain("€60");
 
-    const clinicEmail = renderClinicNotificationEmail(privateData);
+    const privateDataEn: BookingEmailData = {
+      ...privateDataEl,
+      locale: "en",
+    };
+
+    const patientEmailEn = renderPatientConfirmationEmail(privateDataEn);
+    expect(patientEmailEn.text).toContain("Private Visit");
+    expect(patientEmailEn.text).toContain("€60");
+    expect(patientEmailEn.html).toContain("€60");
+
+    const clinicEmail = renderClinicNotificationEmail(privateDataEn);
     expect(clinicEmail.text).toContain("Private Visit");
     expect(clinicEmail.text).toContain("€60");
     expect(clinicEmail.html).toContain("€60");

@@ -1,4 +1,6 @@
 import { clinicConfig } from "@/config/clinicConfig";
+import { formatCoverageLabel } from "@/lib/booking";
+import { intlLocaleTag, resolveLocale, type Locale } from "@/i18n/locales";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -6,7 +8,7 @@ import { clinicConfig } from "@/config/clinicConfig";
 
 export type MessagingChannel = "sms" | "whatsapp" | "viber";
 export type PatientResponseAction = "confirm" | "cancel";
-export type MessageLocale = "el" | "en";
+export type MessageLocale = Locale;
 
 export interface MessagingBookingData {
   bookingId: string;
@@ -230,6 +232,7 @@ function logConfigurationDiagnostics(context: string): void {
  */
 export function buildConfirmationUrls(
   bookingId: string,
+  locale?: MessageLocale,
 ): { confirmUrl: string; cancelUrl: string } {
   const base =
     cleanEnv(process.env["PUBLIC_BASE_URL"]) ||
@@ -237,9 +240,12 @@ export function buildConfirmationUrls(
     (process.env["VERCEL_URL"] ? `https://${process.env["VERCEL_URL"].replace(/^https?:\/\//, "")}` : undefined) ||
     `https://${cleanEnv(process.env["CF_PAGES_URL"]) || "localhost:3000"}`;
 
+  // `lang` lets the webhook landing page answer in the patient's language.
+  const langParam = locale ? `&lang=${locale}` : "";
+
   return {
-    confirmUrl: `${base}/api/messaging/webhook?action=confirm&bookingId=${encodeURIComponent(bookingId)}`,
-    cancelUrl: `${base}/api/messaging/webhook?action=cancel&bookingId=${encodeURIComponent(bookingId)}`,
+    confirmUrl: `${base}/api/messaging/webhook?action=confirm&bookingId=${encodeURIComponent(bookingId)}${langParam}`,
+    cancelUrl: `${base}/api/messaging/webhook?action=cancel&bookingId=${encodeURIComponent(bookingId)}${langParam}`,
   };
 }
 
@@ -247,11 +253,11 @@ export function buildConfirmationUrls(
 // Message template rendering
 // ---------------------------------------------------------------------------
 
-function formatShortDate(dateStr: string): string {
+function formatShortDate(dateStr: string, locale: MessageLocale): string {
   try {
     const [y, m, d] = dateStr.split("-").map(Number);
     if (y && m && d) {
-      return new Date(y, m - 1, d).toLocaleDateString("el-CY", {
+      return new Date(y, m - 1, d).toLocaleDateString(intlLocaleTag(locale), {
         weekday: "short",
         day: "numeric",
         month: "long",
@@ -276,17 +282,12 @@ export interface RenderedMessage {
 export function renderBookingConfirmationMessage(
   data: MessagingBookingData,
 ): RenderedMessage {
-  const locale: MessageLocale = data.locale ?? "el";
-  const { doctor, gesy } = clinicConfig;
-  const shortDate = formatShortDate(data.appointmentDate);
-  const coverageLabel =
-    data.appointmentType === "gesy"
-      ? gesy.referralNotice || "Covered by GeSY (With Referral)"
-      : data.privateFee != null
-        ? `Ιδιωτική · €${data.privateFee}`
-        : "Ιδιωτική (κατ' αίτηση)";
+  const locale: MessageLocale = resolveLocale(data.locale);
+  const { doctor } = clinicConfig;
+  const shortDate = formatShortDate(data.appointmentDate, locale);
+  const coverageLabel = formatCoverageLabel(data.appointmentType, data.privateFee, locale);
 
-  const urls = buildConfirmationUrls(data.bookingId);
+  const urls = buildConfirmationUrls(data.bookingId, locale);
 
   if (locale === "el") {
     const body = [
@@ -348,10 +349,10 @@ export function renderBookingConfirmationMessage(
 export function renderReminderMessage(
   data: MessagingBookingData,
 ): RenderedMessage {
-  const locale: MessageLocale = data.locale ?? "el";
+  const locale: MessageLocale = resolveLocale(data.locale);
   const { doctor } = clinicConfig;
-  const shortDate = formatShortDate(data.appointmentDate);
-  const urls = buildConfirmationUrls(data.bookingId);
+  const shortDate = formatShortDate(data.appointmentDate, locale);
+  const urls = buildConfirmationUrls(data.bookingId, locale);
 
   if (locale === "el") {
     const body = [

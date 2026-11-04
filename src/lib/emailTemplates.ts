@@ -1,4 +1,7 @@
 import { clinicConfig } from "@/config/clinicConfig";
+import { formatCoverageLabel, getAppointmentTypeLabel } from "@/lib/booking";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
+import { DEFAULT_LOCALE, intlLocaleTag, resolveLocale, type Locale } from "@/i18n/locales";
 
 export interface BookingEmailData {
   bookingId: string;
@@ -11,9 +14,23 @@ export interface BookingEmailData {
   appointmentTime: string;
   privateFee?: number | null;
   notes?: string | undefined;
+  /** Canonical (clinic-language) service name for the internal clinic notification. */
+  canonicalServiceName?: string | undefined;
+  /** Patient's preferred notification language (defaults to Greek). */
+  locale?: Locale | undefined;
 }
 
-function formatDate(dateStr: string): string {
+/** Escapes user-supplied values before interpolating them into HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatDate(dateStr: string, locale: Locale = "en"): string {
   try {
     const parts = dateStr.split("-").map(Number);
     const year = parts[0];
@@ -21,7 +38,7 @@ function formatDate(dateStr: string): string {
     const day = parts[2];
     if (year !== undefined && month !== undefined && day !== undefined) {
       const date = new Date(year, month - 1, day);
-      return date.toLocaleDateString("en-GB", {
+      return date.toLocaleDateString(intlLocaleTag(locale), {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -34,60 +51,124 @@ function formatDate(dateStr: string): string {
   }
 }
 
-export function renderPatientConfirmationEmail(data: BookingEmailData) {
-  const { doctor, contact, gesy } = clinicConfig;
-  const formattedDate = formatDate(data.appointmentDate);
-  const isGesy = data.appointmentType === "gesy";
-  const feeLabel = isGesy
-    ? gesy.referralNotice || "Covered by GeSY (With Referral)"
-    : data.privateFee !== null && data.privateFee !== undefined
-      ? `Private fee · €${data.privateFee}`
-      : "Private fee on request";
+const PATIENT_EMAIL_STRINGS = {
+  el: {
+    subject: (doctor: string) => `Επιβεβαίωση Ραντεβού — ${doctor}`,
+    heading: "Επιβεβαίωση Ραντεβού",
+    greeting: (name: string) => `Αγαπητέ/ή ${name},`,
+    introText: (doctor: string) =>
+      `Σας ευχαριστούμε που κλείσατε ραντεβού με ${doctor}. Το αίτημά σας καταχωρήθηκε με επιτυχία.`,
+    introHtml: (doctor: string) =>
+      `Το ραντεβού σας με <strong>${doctor}</strong> καταχωρήθηκε με επιτυχία. Ακολουθούν οι λεπτομέρειες της επίσκεψής σας:`,
+    summaryHeading: "ΣΥΝΟΨΗ ΡΑΝΤΕΒΟΥ",
+    doctor: "Θεραπευτής",
+    service: "Υπηρεσία",
+    category: "Κατηγορία",
+    date: "Ημερομηνία",
+    time: "Ώρα",
+    coverage: "Κάλυψη / Χρέωση",
+    reference: "Κωδικός κράτησης",
+    locationHeading: "Τοποθεσία & Επικοινωνία",
+    address: "Διεύθυνση",
+    phone: "Τηλέφωνο",
+    email: "Email",
+    gesyNoteTitle: "Υπενθύμιση για δικαιούχους ΓεΣΥ",
+    gesyNote:
+      "Παρακαλούμε να έχετε μαζί σας την ταυτότητα / κάρτα δικαιούχου ΓεΣΥ και το έγκυρο παραπεμπτικό του ιατρού σας.",
+    prepTitle: "ΠΡΟΕΤΟΙΜΑΣΙΑ",
+    prepNote: "Παρακαλούμε να προσέλθετε 5-10 λεπτά πριν από την ώρα του ραντεβού σας.",
+    reschedule:
+      "Χρειάζεται αλλαγή ή ακύρωση; Παρακαλούμε επικοινωνήστε με την κλινική τουλάχιστον 24 ώρες νωρίτερα, ώστε να εξυπηρετηθεί άλλος ασθενής.",
+    signOff: "Με εκτίμηση,",
+    rights: "Με την επιφύλαξη παντός δικαιώματος.",
+  },
+  en: {
+    subject: (doctor: string) => `Appointment Confirmation — ${doctor}`,
+    heading: "Appointment Confirmation",
+    greeting: (name: string) => `Dear ${name},`,
+    introText: (doctor: string) =>
+      `Thank you for booking with ${doctor}. Your appointment request has been successfully received.`,
+    introHtml: (doctor: string) =>
+      `Your appointment with <strong>${doctor}</strong> has been successfully booked. Below are the details of your visit:`,
+    summaryHeading: "APPOINTMENT SUMMARY",
+    doctor: "Doctor",
+    service: "Service",
+    category: "Category",
+    date: "Date",
+    time: "Time",
+    coverage: "Coverage / Fee",
+    reference: "Booking Reference",
+    locationHeading: "Clinic Location & Contact",
+    address: "Address",
+    phone: "Telephone",
+    email: "Email",
+    gesyNoteTitle: "GeSY Beneficiary Reminder",
+    gesyNote:
+      "Please remember to bring your valid ID / GeSY beneficiary card and any valid referral document from your doctor to your appointment.",
+    prepTitle: "PREPARATION",
+    prepNote: "Please arrive 5-10 minutes before your scheduled appointment time.",
+    reschedule:
+      "Need to reschedule or cancel? Please contact our clinic at least 24 hours in advance so we can assist other patients.",
+    signOff: "Warm regards,",
+    rights: "All rights reserved.",
+  },
+} as const satisfies Record<Locale, unknown>;
 
-  const subject = `Appointment Confirmation — ${doctor.name}`;
+export function renderPatientConfirmationEmail(data: BookingEmailData) {
+  const locale = resolveLocale(data.locale ?? DEFAULT_LOCALE);
+  const s = PATIENT_EMAIL_STRINGS[locale];
+  const { doctor, contact } = clinicConfig;
+  const specialty = getLocalizedClinic(locale).specialty;
+  const formattedDate = formatDate(data.appointmentDate, locale);
+  const isGesy = data.appointmentType === "gesy";
+  const feeLabel = formatCoverageLabel(data.appointmentType, data.privateFee, locale);
+  const categoryLabel = getAppointmentTypeLabel(data.appointmentType, locale);
+  const ref = data.bookingId.slice(0, 8);
+
+  const subject = s.subject(doctor.name);
 
   const text = `
-Dear ${data.patientName},
+${s.greeting(data.patientName)}
 
-Thank you for booking with ${doctor.name}. Your appointment request has been successfully received.
+${s.introText(doctor.name)}
 
-APPOINTMENT SUMMARY
+${s.summaryHeading}
 -------------------
-Doctor: ${doctor.name} (${doctor.specialty})
-Service: ${data.serviceName}
-Category: ${isGesy ? "GeSY Appointment (ΓεΣΥ)" : "Private Visit"}
-Date: ${formattedDate}
-Time: ${data.appointmentTime}
-Coverage / Fee: ${feeLabel}
-Booking Reference: #${data.bookingId.slice(0, 8)}
+${s.doctor}: ${doctor.name} (${specialty})
+${s.service}: ${data.serviceName}
+${s.category}: ${categoryLabel}
+${s.date}: ${formattedDate}
+${s.time}: ${data.appointmentTime}
+${s.coverage}: ${feeLabel}
+${s.reference}: #${ref}
 
-CLINIC LOCATION
+${s.locationHeading.toUpperCase()}
 ---------------
-Address: ${contact.address.full}
-Phone: ${contact.phone}
-Email: ${contact.email}
+${s.address}: ${contact.address.full}
+${s.phone}: ${contact.phone}
+${s.email}: ${contact.email}
 
-${
-  isGesy
-    ? `IMPORTANT GeSY NOTE:
-Please ensure you bring your valid ID or GeSY beneficiary card and any active referral paperwork from your physician.`
-    : `PREPARATION:
-Please arrive 5-10 minutes before your scheduled appointment time.`
-}
+${isGesy ? `${s.gesyNoteTitle.toUpperCase()}:\n${s.gesyNote}` : `${s.prepTitle}:\n${s.prepNote}`}
 
-If you need to reschedule or cancel, please contact us at least 24 hours in advance.
+${s.reschedule}
 
-Warm regards,
+${s.signOff}
 ${doctor.name}
 ${contact.phone} | ${contact.email}
 `.trim();
 
+  const row = (label: string, value: string, color = "#0f172a") => `
+                      <tr>
+                        <td style="padding:6px 0;font-size:14px;color:#64748b;width:35%;">${label}</td>
+                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:${color};">${value}</td>
+                      </tr>`;
+
   const html = `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="${locale}">
 <head>
   <meta charset="utf-8">
-  <title>${subject}</title>
+  <title>${escapeHtml(subject)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="margin:0;padding:0;background-color:#f8faf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;line-height:1.6;">
@@ -99,17 +180,17 @@ ${contact.phone} | ${contact.email}
           <tr>
             <td style="background-color:#1e4338;padding:36px 32px;text-align:center;">
               <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">${doctor.name}</h1>
-              <p style="margin:6px 0 0;font-size:14px;color:#d4af37;text-transform:uppercase;letter-spacing:0.12em;font-weight:600;">${doctor.specialty}</p>
+              <p style="margin:6px 0 0;font-size:14px;color:#d4af37;text-transform:uppercase;letter-spacing:0.12em;font-weight:600;">${specialty}</p>
             </td>
           </tr>
 
           <!-- Main Body -->
           <tr>
             <td style="padding:36px 32px;">
-              <h2 style="margin:0 0 16px;font-size:20px;color:#0f172a;font-weight:600;">Appointment Confirmation</h2>
+              <h2 style="margin:0 0 16px;font-size:20px;color:#0f172a;font-weight:600;">${s.heading}</h2>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;">
-                Dear <strong>${data.patientName}</strong>,<br>
-                Your appointment with <strong>${doctor.name}</strong> has been successfully booked. Below are the details of your visit:
+                ${s.greeting(`<strong>${escapeHtml(data.patientName)}</strong>`)}<br>
+                ${s.introHtml(doctor.name)}
               </p>
 
               <!-- Appointment Card -->
@@ -117,31 +198,14 @@ ${contact.phone} | ${contact.email}
                 <tr>
                   <td style="padding:20px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      ${row(s.service, escapeHtml(data.serviceName))}
+                      ${row(s.date, formattedDate)}
+                      ${row(s.time, data.appointmentTime, "#1e4338")}
+                      ${row(s.category, categoryLabel)}
+                      ${row(s.coverage, feeLabel, "#1e4338")}
                       <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;width:35%;">Service</td>
-                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#0f172a;">${data.serviceName}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;">Date</td>
-                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#0f172a;">${formattedDate}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;">Time</td>
-                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1e4338;">${data.appointmentTime}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;">Category</td>
-                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#0f172a;">
-                          ${isGesy ? "ΓεΣΥ / GeSY Covered" : "Private Visit"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;">Rate / Coverage</td>
-                        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1e4338;">${feeLabel}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:14px;color:#64748b;">Reference ID</td>
-                        <td style="padding:6px 0;font-size:12px;font-family:monospace;color:#64748b;">#${data.bookingId.slice(0, 8)}</td>
+                        <td style="padding:6px 0;font-size:14px;color:#64748b;">${s.reference}</td>
+                        <td style="padding:6px 0;font-size:12px;font-family:monospace;color:#64748b;">#${ref}</td>
                       </tr>
                     </table>
                   </td>
@@ -152,28 +216,26 @@ ${contact.phone} | ${contact.email}
                 isGesy
                   ? `
               <div style="background-color:#f0fdf4;border-left:4px solid #16a34a;padding:14px 16px;border-radius:0 8px 8px 0;margin-bottom:28px;">
-                <p style="margin:0;font-size:13px;color:#15803d;font-weight:600;">GeSY Beneficiary Reminder</p>
-                <p style="margin:4px 0 0;font-size:13px;color:#166534;">
-                  Please remember to bring your valid ID / GeSY beneficiary card and any valid referral document from your doctor to your appointment.
-                </p>
+                <p style="margin:0;font-size:13px;color:#15803d;font-weight:600;">${s.gesyNoteTitle}</p>
+                <p style="margin:4px 0 0;font-size:13px;color:#166534;">${s.gesyNote}</p>
               </div>`
                   : ""
               }
 
               <!-- Clinic Info -->
-              <h3 style="margin:0 0 12px;font-size:15px;color:#0f172a;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Clinic Location & Contact</h3>
+              <h3 style="margin:0 0 12px;font-size:15px;color:#0f172a;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">${s.locationHeading}</h3>
               <p style="margin:0 0 6px;font-size:14px;color:#475569;">
-                <strong>Address:</strong> ${contact.address.full}
+                <strong>${s.address}:</strong> ${contact.address.full}
               </p>
               <p style="margin:0 0 6px;font-size:14px;color:#475569;">
-                <strong>Telephone:</strong> <a href="${contact.phoneHref}" style="color:#1e4338;text-decoration:none;font-weight:600;">${contact.phone}</a>
+                <strong>${s.phone}:</strong> <a href="${contact.phoneHref}" style="color:#1e4338;text-decoration:none;font-weight:600;">${contact.phone}</a>
               </p>
               <p style="margin:0 0 24px;font-size:14px;color:#475569;">
-                <strong>Email:</strong> <a href="${contact.emailHref}" style="color:#1e4338;text-decoration:none;">${contact.email}</a>
+                <strong>${s.email}:</strong> <a href="${contact.emailHref}" style="color:#1e4338;text-decoration:none;">${contact.email}</a>
               </p>
 
               <p style="margin:0;font-size:13px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:20px;">
-                Need to reschedule or cancel? Please contact our clinic at least 24 hours in advance so we can assist other patients.
+                ${s.reschedule}
               </p>
             </td>
           </tr>
@@ -182,7 +244,7 @@ ${contact.phone} | ${contact.email}
           <tr>
             <td style="background-color:#f1f5f9;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
               <p style="margin:0;font-size:12px;color:#64748b;">
-                © ${new Date().getFullYear()} ${doctor.name}. All rights reserved.
+                © ${new Date().getFullYear()} ${doctor.name}. ${s.rights}
               </p>
             </td>
           </tr>
@@ -201,8 +263,10 @@ export function renderClinicNotificationEmail(data: BookingEmailData) {
   const { doctor, contact } = clinicConfig;
   const formattedDate = formatDate(data.appointmentDate);
   const isGesy = data.appointmentType === "gesy";
+  const serviceName = data.canonicalServiceName ?? data.serviceName;
+  const preferredLanguage = resolveLocale(data.locale ?? DEFAULT_LOCALE) === "en" ? "English" : "Ελληνικά (Greek)";
 
-  const subject = `[New Booking] ${data.patientName} — ${data.serviceName} (${formattedDate})`;
+  const subject = `[New Booking] ${data.patientName} — ${serviceName} (${formattedDate})`;
 
   const text = `
 NEW PATIENT BOOKING RECEIVED
@@ -214,9 +278,10 @@ PATIENT DETAILS:
 - Name: ${data.patientName}
 - Phone: ${data.patientPhone}
 - Email: ${data.patientEmail}
+- Preferred language: ${preferredLanguage}
 
 APPOINTMENT DETAILS:
-- Service: ${data.serviceName}
+- Service: ${serviceName}
 - Category: ${isGesy ? "GeSY (With Referral)" : "Private Visit"}
 - Date: ${formattedDate}
 - Time: ${data.appointmentTime}
@@ -263,19 +328,23 @@ Please log into your clinic dashboard or contact the patient if any adjustments 
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;width:35%;">Full Name</td>
-                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#0f172a;">${data.patientName}</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#0f172a;">${escapeHtml(data.patientName)}</td>
                       </tr>
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;">Phone</td>
                         <td style="padding:4px 0;font-size:14px;font-weight:600;">
-                          <a href="tel:${data.patientPhone}" style="color:#1e4338;text-decoration:none;">${data.patientPhone}</a>
+                          <a href="tel:${escapeHtml(data.patientPhone)}" style="color:#1e4338;text-decoration:none;">${escapeHtml(data.patientPhone)}</a>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;">Email</td>
                         <td style="padding:4px 0;font-size:14px;">
-                          <a href="mailto:${data.patientEmail}" style="color:#1e4338;text-decoration:none;">${data.patientEmail}</a>
+                          <a href="mailto:${escapeHtml(data.patientEmail)}" style="color:#1e4338;text-decoration:none;">${escapeHtml(data.patientEmail)}</a>
                         </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;font-size:14px;color:#64748b;">Preferred language</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#0f172a;">${preferredLanguage}</td>
                       </tr>
                     </table>
                   </td>
@@ -290,7 +359,7 @@ Please log into your clinic dashboard or contact the patient if any adjustments 
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;width:35%;">Service</td>
-                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#0f172a;">${data.serviceName}</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#0f172a;">${serviceName}</td>
                       </tr>
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;">Date & Time</td>
@@ -326,7 +395,7 @@ Please log into your clinic dashboard or contact the patient if any adjustments 
                   ? `
               <div style="background-color:#f1f5f9;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
                 <p style="margin:0 0 4px;font-size:12px;font-weight:600;text-transform:uppercase;color:#475569;">Patient Notes / Symptoms:</p>
-                <p style="margin:0;font-size:14px;color:#1e293b;font-style:italic;">"${data.notes}"</p>
+                <p style="margin:0;font-size:14px;color:#1e293b;font-style:italic;">"${escapeHtml(data.notes)}"</p>
               </div>`
                   : ""
               }

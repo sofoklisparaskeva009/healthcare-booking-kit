@@ -1,5 +1,6 @@
 import { Stethoscope, CheckCircle2 } from "lucide-react";
-import { clinicConfig } from "@/config/clinicConfig";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -11,11 +12,15 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 export function ServicesSection() {
-  const { services, gesy } = clinicConfig;
+  const { locale, t } = useLanguage();
+  const { services, gesy } = getLocalizedClinic(locale);
 
   return (
     <section id="services" className="container mx-auto scroll-mt-16 px-6 py-24">
-      <SectionHeading eyebrow="Treatments" title="Services & coverage" />
+      <SectionHeading
+        eyebrow={t.sections.servicesEyebrow}
+        title={t.sections.servicesTitle}
+      />
       <div className="grid gap-6 md:grid-cols-3">
         {services.map((service) => (
           <div
@@ -39,7 +44,7 @@ export function ServicesSection() {
                 )}
                 {service.privateFee !== undefined && (
                   <span className="text-xs font-medium text-muted-foreground px-2 py-1">
-                    Private fee · €{service.privateFee}
+                    {t.services.privateFee(service.privateFee)}
                   </span>
                 )}
               </div>

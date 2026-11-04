@@ -16,13 +16,25 @@ const input = {
   email: "patient@example.com",
 };
 describe("GeSY and private bookings", () => {
-  it("accepts GeSY appointments", () => {
-    expect(bookingSchema.parse({ ...input, appointmentType: "gesy" }).appointmentType).toBe("gesy");
+  it("accepts GeSY appointments and defaults preferredLanguage to 'el'", () => {
+    const parsed = bookingSchema.parse({ ...input, appointmentType: "gesy" });
+    expect(parsed.appointmentType).toBe("gesy");
+    expect(parsed.preferredLanguage).toBe("el");
   });
-  it("accepts private visits", () => {
-    expect(bookingSchema.parse({ ...input, appointmentType: "private" }).appointmentType).toBe(
-      "private",
-    );
+  it("accepts private visits with explicit preferredLanguage ('el' or 'en')", () => {
+    const parsedEn = bookingSchema.parse({
+      ...input,
+      appointmentType: "private",
+      preferredLanguage: "en",
+    });
+    expect(parsedEn.appointmentType).toBe("private");
+    expect(parsedEn.preferredLanguage).toBe("en");
+  });
+  it("rejects unsupported preferredLanguage values", () => {
+    expect(
+      bookingSchema.safeParse({ ...input, appointmentType: "gesy", preferredLanguage: "fr" })
+        .success,
+    ).toBe(false);
   });
   it("requires a supported appointment type", () => {
     expect(bookingSchema.safeParse(input).success).toBe(false);

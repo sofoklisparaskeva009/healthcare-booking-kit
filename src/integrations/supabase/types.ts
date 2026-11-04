@@ -25,6 +25,7 @@ export type Database = {
           patient_name: string | null;
           patient_phone: string | null;
           phone: string;
+          preferred_language: string | null;
           price_eur: number;
           private_fee_eur: number | null;
           service: string;
@@ -49,6 +50,7 @@ export type Database = {
           patient_name?: string | null;
           patient_phone?: string | null;
           phone: string;
+          preferred_language?: string | null;
           price_eur: number;
           private_fee_eur?: number | null;
           service: string;
@@ -73,6 +75,7 @@ export type Database = {
           patient_name?: string | null;
           patient_phone?: string | null;
           phone?: string;
+          preferred_language?: string | null;
           price_eur?: number;
           private_fee_eur?: number | null;
           service?: string;
@@ -100,6 +103,7 @@ export type Database = {
           patient_name: string | null;
           patient_phone: string | null;
           phone: string;
+          preferred_language: string | null;
           price_eur: number;
           private_fee_eur: number | null;
           service: string;
@@ -124,6 +128,7 @@ export type Database = {
           patient_name?: string | null;
           patient_phone?: string | null;
           phone: string;
+          preferred_language?: string | null;
           price_eur: number;
           private_fee_eur?: number | null;
           service: string;
@@ -148,6 +153,7 @@ export type Database = {
           patient_name?: string | null;
           patient_phone?: string | null;
           phone?: string;
+          preferred_language?: string | null;
           price_eur?: number;
           private_fee_eur?: number | null;
           service?: string;

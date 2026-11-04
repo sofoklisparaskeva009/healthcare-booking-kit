@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { bookingSchema, SERVICES, getBookingFee } from "./booking";
+import { getLocalizedServiceName } from "@/i18n/clinicContent";
 
 export const getBookedSlots = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) =>
@@ -59,12 +60,23 @@ export const getBookedSlots = createServerFn({ method: "GET" })
     }
   });
 
+export type CreateBookingErrorCode = "invalid_service" | "slot_taken" | "save_failed";
+
 export const createBooking = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => bookingSchema.parse(d))
   .handler(async ({ data }) => {
     const service = SERVICES.find((s) => s.id === data.serviceId);
-    if (!service) return { ok: false as const, error: "Please choose a valid service." };
+    if (!service) {
+      return {
+        ok: false as const,
+        code: "invalid_service" as CreateBookingErrorCode,
+        error: "Please choose a valid service.",
+      };
+    }
     const privateFee = getBookingFee(service, data.appointmentType);
+    // Validated by bookingSchema (z.enum(LOCALES)); drives email + SMS templates.
+    const preferredLanguage = data.preferredLanguage;
+    const localizedServiceName = getLocalizedServiceName(service.id, preferredLanguage);
 
     let row: { id: string };
     try {
@@ -86,6 +98,7 @@ export const createBooking = createServerFn({ method: "POST" })
           phone: data.phone,
           email: data.email,
           notes: data.notes || null,
+          preferred_language: preferredLanguage,
         };
         const triedMissingCols = new Set<string>();
 
@@ -180,10 +193,15 @@ export const createBooking = createServerFn({ method: "POST" })
         if (lastError?.code === "23505") {
           return {
             ok: false as const,
+            code: "slot_taken" as CreateBookingErrorCode,
             error: "That time slot was just taken. Please choose another.",
           };
         }
-        return { ok: false as const, error: "Could not save your booking. Please try again." };
+        return {
+          ok: false as const,
+          code: "save_failed" as CreateBookingErrorCode,
+          error: "Could not save your booking. Please try again.",
+        };
       }
       row = insertedRow;
     } catch (dbErr) {
@@ -199,12 +217,14 @@ export const createBooking = createServerFn({ method: "POST" })
         patientName: data.fullName,
         patientEmail: data.email,
         patientPhone: data.phone,
-        serviceName: service.name,
+        serviceName: localizedServiceName,
+        canonicalServiceName: service.name,
         appointmentType: data.appointmentType,
         appointmentDate: data.date,
         appointmentTime: data.time,
         privateFee,
         notes: data.notes || undefined,
+        locale: preferredLanguage,
       });
     } catch (emailErr) {
       console.error("[createBooking] Email dispatch error:", emailErr);
@@ -235,12 +255,12 @@ export const createBooking = createServerFn({ method: "POST" })
         bookingId: row.id,
         patientName: data.fullName,
         patientPhone: data.phone,
-        serviceName: service.name,
+        serviceName: localizedServiceName,
         appointmentType: data.appointmentType,
         appointmentDate: data.date,
         appointmentTime: data.time,
         privateFee,
-        locale: "el",
+        locale: preferredLanguage,
       });
 
       if (!msgResult.ok) {

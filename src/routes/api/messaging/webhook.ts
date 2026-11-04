@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Messaging Webhook API Route
  * Path: /api/messaging/webhook
  *
@@ -12,22 +12,25 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { handleMessagingWebhook } from "@/lib/messagingWebhook.server";
+import { resolveLocale, type Locale } from "@/i18n/locales";
 
 export const Route = createFileRoute("/api/messaging/webhook")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const result = await handleMessagingWebhook(request);
+        // Links in SMS carry `lang=el|en` (the booking's preferred_language).
+        const locale = resolveLocale(new URL(request.url).searchParams.get("lang"));
 
         if (!result.ok) {
-          return new Response(buildHtmlResponse(false, result.error, result.action), {
+          return new Response(buildHtmlResponse(locale, false, result.action), {
             status: result.status,
             headers: { "Content-Type": "text/html; charset=utf-8" },
           });
         }
 
         return new Response(
-          buildHtmlResponse(true, undefined, result.action, result.alreadyProcessed),
+          buildHtmlResponse(locale, true, result.action, result.alreadyProcessed),
           {
             status: result.status,
             headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -56,35 +59,69 @@ export const Route = createFileRoute("/api/messaging/webhook")({
   },
 });
 
+const LANDING_STRINGS = {
+  el: {
+    titleConfirmed: "Το ραντεβού επιβεβαιώθηκε",
+    titleCancelled: "Το ραντεβού ακυρώθηκε",
+    titleProcessed: "Το αίτημα ολοκληρώθηκε",
+    titleFailed: "Το αίτημα απέτυχε",
+    headingConfirmed: "Το ραντεβού επιβεβαιώθηκε!",
+    headingFailed: "Κάτι πήγε στραβά",
+    alreadyProcessed: "Η κατάσταση του ραντεβού σας είχε ήδη ενημερωθεί. Δεν απαιτείται άλλη ενέργεια.",
+    confirmed: "Σας ευχαριστούμε που επιβεβαιώσατε το ραντεβού σας. Ανυπομονούμε να σας δούμε!",
+    cancelled:
+      "Το ραντεβού σας ακυρώθηκε με επιτυχία. Αν θέλετε να κλείσετε νέο ραντεβού, επικοινωνήστε με την κλινική.",
+    failed: "Δεν ήταν δυνατή η επεξεργασία του αιτήματός σας. Παρακαλούμε επικοινωνήστε απευθείας με την κλινική.",
+    footer: "Για οποιαδήποτε απορία, επικοινωνήστε απευθείας με την κλινική.",
+  },
+  en: {
+    titleConfirmed: "Appointment Confirmed",
+    titleCancelled: "Appointment Cancelled",
+    titleProcessed: "Request Processed",
+    titleFailed: "Request Failed",
+    headingConfirmed: "Appointment Confirmed!",
+    headingFailed: "Something Went Wrong",
+    alreadyProcessed: "Your appointment status was already updated. No further action is needed.",
+    confirmed: "Thank you for confirming your appointment. We look forward to seeing you!",
+    cancelled:
+      "Your appointment has been successfully cancelled. If you would like to reschedule, please contact the clinic.",
+    failed: "We could not process your request. Please contact the clinic directly.",
+    footer: "If you have any questions, please contact the clinic directly.",
+  },
+} as const satisfies Record<Locale, unknown>;
+
 function buildHtmlResponse(
+  locale: Locale,
   success: boolean,
-  errorMessage?: string,
   action?: "confirm" | "cancel",
   alreadyProcessed?: boolean,
 ): string {
+  const s = LANDING_STRINGS[locale];
+
   const title = success
     ? action === "confirm"
-      ? "Appointment Confirmed"
+      ? s.titleConfirmed
       : action === "cancel"
-        ? "Appointment Cancelled"
-        : "Request Processed"
-    : "Request Failed";
+        ? s.titleCancelled
+        : s.titleProcessed
+    : s.titleFailed;
 
   const heading = success
     ? action === "confirm"
-      ? "Appointment Confirmed!"
+      ? s.headingConfirmed
       : action === "cancel"
-        ? "Appointment Cancelled"
-        : "Request Processed"
-    : "Something Went Wrong";
+        ? s.titleCancelled
+        : s.titleProcessed
+    : s.headingFailed;
 
+  // Technical error details are logged server-side; patients get a localized message.
   const bodyText = success
     ? alreadyProcessed
-      ? "Your appointment status was already updated. No further action is needed."
+      ? s.alreadyProcessed
       : action === "confirm"
-        ? "Thank you for confirming your appointment. We look forward to seeing you!"
-        : "Your appointment has been successfully cancelled. If you would like to reschedule, please contact the clinic."
-    : errorMessage ?? "An unexpected error occurred. Please contact the clinic directly.";
+        ? s.confirmed
+        : s.cancelled
+    : s.failed;
 
   const accentColor =
     success && action === "confirm"
@@ -102,7 +139,7 @@ function buildHtmlResponse(
 
   return [
     "<!DOCTYPE html>",
-    "<html lang=\"en\">",
+    `<html lang="${locale}">`,
     "<head>",
     "  <meta charset=\"utf-8\" />",
     "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
@@ -122,7 +159,7 @@ function buildHtmlResponse(
     `    <div class="icon">${iconEmoji}</div>`,
     `    <h1>${heading}</h1>`,
     `    <p>${bodyText}</p>`,
-    "    <div class=\"footer\">If you have any questions, please contact the clinic directly.</div>",
+    `    <div class="footer">${s.footer}</div>`,
     "  </div>",
     "</body>",
     "</html>",

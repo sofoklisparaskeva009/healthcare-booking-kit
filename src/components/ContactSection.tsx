@@ -1,5 +1,7 @@
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
 import { clinicConfig } from "@/config/clinicConfig";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -11,17 +13,19 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 export function ContactSection() {
-  const { contact, workingHours } = clinicConfig;
+  const { contact } = clinicConfig;
+  const { locale, t } = useLanguage();
+  const { workingHours, accessibilityNote } = getLocalizedClinic(locale);
 
   return (
     <section id="contact" className="container mx-auto scroll-mt-16 px-6 py-24">
-      <SectionHeading eyebrow="Visit" title="Contact & location" />
+      <SectionHeading eyebrow={t.sections.contactEyebrow} title={t.sections.contactTitle} />
       <div className="grid gap-8 md:grid-cols-2">
         <div className="space-y-6 rounded-2xl border border-border bg-card p-8">
           <div className="flex gap-4">
             <MapPin className="mt-1 h-5 w-5 shrink-0 text-gold" />
             <div>
-              <p className="text-sm text-muted-foreground">Address</p>
+              <p className="text-sm text-muted-foreground">{t.contact.address}</p>
               <p className="font-medium text-foreground">{contact.address.full}</p>
             </div>
           </div>
@@ -29,7 +33,7 @@ export function ContactSection() {
           <div className="flex gap-4">
             <Phone className="mt-1 h-5 w-5 shrink-0 text-gold" />
             <div>
-              <p className="text-sm text-muted-foreground">Phone</p>
+              <p className="text-sm text-muted-foreground">{t.contact.phone}</p>
               <a
                 href={contact.phoneHref}
                 className="font-medium text-foreground transition-colors hover:text-primary"
@@ -42,7 +46,7 @@ export function ContactSection() {
           <div className="flex gap-4">
             <Mail className="mt-1 h-5 w-5 shrink-0 text-gold" />
             <div>
-              <p className="text-sm text-muted-foreground">Email</p>
+              <p className="text-sm text-muted-foreground">{t.contact.email}</p>
               <a
                 href={contact.emailHref}
                 className="font-medium text-foreground transition-colors hover:text-primary"
@@ -54,7 +58,7 @@ export function ContactSection() {
 
           <div className="border-t border-border pt-6">
             <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4 text-gold" /> Working hours
+              <Clock className="h-4 w-4 text-gold" /> {t.contact.workingHours}
             </p>
             {workingHours.map((wh) => (
               <div key={wh.days} className="flex justify-between py-1 text-sm">
@@ -70,16 +74,16 @@ export function ContactSection() {
             ))}
           </div>
 
-          {contact.location.accessibilityNote && (
+          {accessibilityNote && (
             <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-              {contact.location.accessibilityNote}
+              {accessibilityNote}
             </p>
           )}
         </div>
 
         <div className="min-h-80 overflow-hidden rounded-2xl border border-border shadow-xs">
           <iframe
-            title="Clinic location map"
+            title={t.contact.mapTitle}
             className="h-full min-h-80 w-full grayscale"
             src={contact.location.mapEmbedUrl}
             loading="lazy"

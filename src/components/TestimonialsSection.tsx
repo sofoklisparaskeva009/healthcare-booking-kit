@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
-import { clinicConfig } from "@/config/clinicConfig";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -11,30 +12,36 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 export function TestimonialsSection() {
-  const { testimonials } = clinicConfig;
+  const { locale, t } = useLanguage();
+  const { testimonials } = getLocalizedClinic(locale);
 
   return (
     <section id="testimonials" className="container mx-auto scroll-mt-16 px-6 py-24">
-      <SectionHeading eyebrow="Testimonials" title="What patients say" />
+      <SectionHeading
+        eyebrow={t.sections.testimonialsEyebrow}
+        title={t.sections.testimonialsTitle}
+      />
       <div className="grid gap-6 md:grid-cols-3">
-        {testimonials.map((t) => (
+        {testimonials.map((item) => (
           <figure
-            key={t.name}
+            key={item.name}
             className="flex flex-col justify-between rounded-2xl border border-border bg-card p-8 shadow-xs"
           >
             <div>
               <div className="flex gap-1 text-gold">
-                {Array.from({ length: t.rating || 5 }).map((_, i) => (
+                {Array.from({ length: item.rating || 5 }).map((_, i) => (
                   <Star key={i} className="h-4 w-4 fill-current" />
                 ))}
               </div>
               <blockquote className="mt-5 font-display text-xl leading-snug text-foreground">
-                “{t.text}”
+                “{item.text}”
               </blockquote>
             </div>
             <figcaption className="mt-6 border-t border-border pt-4 text-sm text-muted-foreground flex items-center justify-between">
-              <span className="font-medium text-foreground">— {t.name}</span>
-              {t.treatment && <span className="text-xs text-muted-foreground">{t.treatment}</span>}
+              <span className="font-medium text-foreground">— {item.name}</span>
+              {item.treatment && (
+                <span className="text-xs text-muted-foreground">{item.treatment}</span>
+              )}
             </figcaption>
           </figure>
         ))}

@@ -4,7 +4,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { clinicConfig } from "@/config/clinicConfig";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -16,12 +17,13 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 export function FaqSection() {
-  const { faqs } = clinicConfig;
+  const { locale, t } = useLanguage();
+  const { faqs } = getLocalizedClinic(locale);
 
   return (
     <section id="faq" className="scroll-mt-16 bg-secondary py-24">
       <div className="container mx-auto max-w-3xl px-6">
-        <SectionHeading eyebrow="FAQ" title="Common questions" />
+        <SectionHeading eyebrow={t.sections.faqEyebrow} title={t.sections.faqTitle} />
         <Accordion
           type="single"
           collapsible

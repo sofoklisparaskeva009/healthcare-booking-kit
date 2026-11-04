@@ -9,6 +9,7 @@ import { FaqSection } from "@/components/FaqSection";
 import { ContactSection } from "@/components/ContactSection";
 import { Footer } from "@/components/Footer";
 import { clinicConfig } from "@/config/clinicConfig";
+import { useLanguage } from "@/i18n/LanguageContext";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,6 +38,8 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 function Index() {
+  const { t } = useLanguage();
+
   const scrollToBooking = () => {
     document.getElementById("book")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -50,7 +53,10 @@ function Index() {
 
         <section id="book" className="scroll-mt-16 bg-secondary py-24">
           <div className="container mx-auto max-w-5xl px-6">
-            <SectionHeading eyebrow="Online Booking" title="Book your appointment" />
+            <SectionHeading
+              eyebrow={t.sections.bookingEyebrow}
+              title={t.sections.bookingTitle}
+            />
             <div className="rounded-3xl border border-border bg-background p-6 shadow-elegant md:p-10">
               <BookingFlow />
             </div>
