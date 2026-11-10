@@ -1,11 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { adminLogin, verifyAdminSession } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stethoscope, Lock, Mail, Loader2, ArrowLeft } from "lucide-react";
 import { clinicConfig } from "@/config/clinicConfig";
+
+export const ADMIN_TOKEN_KEY = "clinic.admin.access_token";
+export const ADMIN_EMAIL_KEY = "clinic.admin.email";
 
 export const Route = createFileRoute("/admin/login")({
   head: () => ({
@@ -26,23 +29,25 @@ function AdminLogin() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate({ to: "/admin" });
-      } else {
+    const existingToken = window.localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (!existingToken) {
+      setCheckingAuth(false);
+      return;
+    }
+
+    verifyAdminSession({ data: { accessToken: existingToken } })
+      .then((res) => {
+        if (res.ok) {
+          navigate({ to: "/admin" });
+        } else {
+          window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+          window.localStorage.removeItem(ADMIN_EMAIL_KEY);
+          setCheckingAuth(false);
+        }
+      })
+      .catch(() => {
         setCheckingAuth(false);
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate({ to: "/admin" });
-      }
-    });
-
-    return () => subscription.unsubscribe();
+      });
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,22 +56,23 @@ function AdminLogin() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const res = await adminLogin({
+        data: {
+          email: email.trim(),
+          password,
+        },
       });
 
-      if (error) {
-        setErrorMsg(
-          error.message === "Invalid login credentials"
-            ? "Λανθασμένο email ή κωδικός πρόσβασης."
-            : error.message,
-        );
-      } else if (data.session) {
+      if (!res.ok) {
+        setErrorMsg(res.error);
+      } else {
+        window.localStorage.setItem(ADMIN_TOKEN_KEY, res.accessToken);
+        window.localStorage.setItem(ADMIN_EMAIL_KEY, res.user.email);
         navigate({ to: "/admin" });
       }
-    } catch {
-      setErrorMsg("Προέκυψε απρόσμενο σφάλμα κατά τη σύνδεση.");
+    } catch (err: any) {
+      console.error("[AdminLogin] Server action error:", err);
+      setErrorMsg("Προέκυψε σφάλμα κατά τη σύνδεση. Παρακαλώ δοκιμάστε ξανά.");
     } finally {
       setLoading(false);
     }

@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   getAdminBookings,
   updateBookingStatus,
   deleteBooking,
   type AdminBooking,
 } from "@/lib/admin.functions";
+import { ADMIN_TOKEN_KEY, ADMIN_EMAIL_KEY } from "./login";
 import { clinicConfig } from "@/config/clinicConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,6 @@ import {
   Stethoscope,
   Filter,
   FileText,
-  AlertCircle,
   ExternalLink,
   Euro,
 } from "lucide-react";
@@ -42,7 +41,7 @@ export const Route = createFileRoute("/admin/")({
 
 function AdminDashboard() {
   const navigate = useNavigate();
-  const [session, setSession] = useState<any>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,54 +50,64 @@ function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate({ to: "/admin/login" });
-      } else {
-        setSession(session);
-        setCheckingAuth(false);
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate({ to: "/admin/login" });
-      } else {
-        setSession(session);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+  const handleLogout = useCallback(() => {
+    window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+    window.localStorage.removeItem(ADMIN_EMAIL_KEY);
+    navigate({ to: "/admin/login" });
   }, [navigate]);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const data = await getAdminBookings();
-      setBookings(data);
-    } catch (err) {
-      console.error("Failed to load admin bookings:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadData = useCallback(
+    async (tokenArg?: string) => {
+      const token = tokenArg ?? accessToken ?? window.localStorage.getItem(ADMIN_TOKEN_KEY);
+      if (!token) {
+        handleLogout();
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await getAdminBookings({ data: { accessToken: token } });
+        if (res.unauthorized) {
+          handleLogout();
+          return;
+        }
+        if (res.ok) {
+          setBookings(res.bookings);
+        }
+      } catch (err) {
+        console.error("Failed to load admin bookings:", err);
+      } finally {
+        setLoading(false);
+        setCheckingAuth(false);
+      }
+    },
+    [accessToken, handleLogout],
+  );
 
   useEffect(() => {
-    if (!checkingAuth && session) {
-      loadData();
+    const storedToken = window.localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (!storedToken) {
+      navigate({ to: "/admin/login" });
+      return;
     }
-  }, [checkingAuth, session]);
+    setAccessToken(storedToken);
+    loadData(storedToken);
+  }, [navigate, loadData]);
 
   const handleStatusChange = async (
     bookingId: string,
     newStatus: "confirmed" | "cancelled" | "pending",
   ) => {
+    if (!accessToken) return;
     setActionId(bookingId);
     try {
-      const res = await updateBookingStatus({ data: { bookingId, newStatus } });
+      const res = await updateBookingStatus({
+        data: { accessToken, bookingId, newStatus },
+      });
+      if ((res as { unauthorized?: boolean }).unauthorized) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         setBookings((prev) =>
           prev.map((b) => (b.id === bookingId ? { ...b, status: newStatus } : b)),
@@ -112,12 +121,17 @@ function AdminDashboard() {
   };
 
   const handleDelete = async (bookingId: string) => {
+    if (!accessToken) return;
     if (!window.confirm("Είστε βέβαιοι ότι θέλετε να διαγράψετε οριστικά αυτή την κράτηση;")) {
       return;
     }
     setActionId(bookingId);
     try {
-      const res = await deleteBooking({ data: { bookingId } });
+      const res = await deleteBooking({ data: { accessToken, bookingId } });
+      if ((res as { unauthorized?: boolean }).unauthorized) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         setBookings((prev) => prev.filter((b) => b.id !== bookingId));
       }
@@ -126,11 +140,6 @@ function AdminDashboard() {
     } finally {
       setActionId(null);
     }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/admin/login" });
   };
 
   const filteredBookings = useMemo(() => {
@@ -283,7 +292,7 @@ function AdminDashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={loadData}
+              onClick={() => loadData()}
               disabled={loading}
               className="h-9 text-xs"
             >
