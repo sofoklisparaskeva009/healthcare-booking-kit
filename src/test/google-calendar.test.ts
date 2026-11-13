@@ -7,6 +7,8 @@ import {
   calculateEventTimes,
   createGoogleCalendarEvent,
   resetCachedAccessToken,
+  sanitizeCalendarId,
+  GOOGLE_CALENDAR_SCOPES,
   type GoogleCalendarEventData,
 } from "../lib/googleCalendar.server";
 
@@ -225,6 +227,7 @@ describe("Google Calendar Integration", () => {
 
       process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
       process.env["GOOGLE_PRIVATE_KEY"] = privateKey;
+      process.env["GOOGLE_CALENDAR_ID"] = "clinic@group.calendar.google.com";
 
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -246,6 +249,34 @@ describe("Google Calendar Integration", () => {
       expect(errSpy).toHaveBeenCalled();
     });
 
+    it("fails pre-flight validation when calendarId is undefined or empty", async () => {
+      const { generateKeyPairSync } = await import("node:crypto");
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: "spki", format: "pem" },
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      });
+
+      process.env["GOOGLE_CLIENT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
+      process.env["GOOGLE_PRIVATE_KEY"] = privateKey;
+      process.env["GOOGLE_CALENDAR_ID"] = "   ";
+
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const result = await createGoogleCalendarEvent(mockBookingData);
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain("Pre-flight Validation Failed");
+      expect(errSpy).toHaveBeenCalledWith("GOOGLE CALENDAR ERROR:", expect.any(Error));
+    });
+
+    it("sanitizes calendarId with .trim() and logs debug output before calendar.events.insert", () => {
+      expect(sanitizeCalendarId("  doctor@gmail.com \n ")).toBe("doctor@gmail.com");
+      expect(sanitizeCalendarId('"doctor%40gmail.com\\n"')).toBe("doctor@gmail.com");
+      expect(GOOGLE_CALENDAR_SCOPES).toContain("https://www.googleapis.com/auth/calendar");
+      expect(GOOGLE_CALENDAR_SCOPES).toContain("https://www.googleapis.com/auth/calendar.events");
+    });
+
     it("retries event creation without attendees if Google API returns attendee/guest error", async () => {
       const { generateKeyPairSync } = await import("node:crypto");
       const { privateKey } = generateKeyPairSync("rsa", {
@@ -256,6 +287,7 @@ describe("Google Calendar Integration", () => {
 
       process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
       process.env["GOOGLE_PRIVATE_KEY"] = privateKey;
+      process.env["GOOGLE_CALENDAR_ID"] = "clinic@group.calendar.google.com";
 
       let callCount = 0;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {

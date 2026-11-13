@@ -40,6 +40,42 @@ export function resetCachedAccessToken(): void {
   cachedAccessToken = null;
 }
 
+export const GOOGLE_CALENDAR_SCOPES = [
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events",
+];
+
+/**
+ * Sanitizes a Google Calendar ID:
+ * - Applies .trim() to remove leading/trailing whitespace and newlines
+ * - Removes literal escaped `\n` / `\r`, zero-width characters, and accidental surrounding quotes/commas
+ * - Normalizes `%40` to `@` so `encodeURIComponent` never double-encodes `%40` into `%2540`
+ */
+export function sanitizeCalendarId(rawCalendarId: string | undefined): string {
+  if (!rawCalendarId) return "";
+  return rawCalendarId
+    .trim()
+    .replace(/\\n|\\r/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^[\s"',]+|[\s"',]+$/g, "")
+    .replace(/%40/gi, "@")
+    .trim();
+}
+
+/**
+ * Sanitizes a Google Service Account client_email:
+ * - Applies .trim() and strips accidental quotes, commas, or literal `\n`/`\r`
+ */
+export function sanitizeClientEmail(rawEmail: string | undefined): string {
+  if (!rawEmail) return "";
+  return rawEmail
+    .trim()
+    .replace(/\\n|\\r/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^[\s"',]+|[\s"',]+$/g, "")
+    .trim();
+}
+
 /**
  * Normalizes a PEM private key string:
  * - Converts escaped `\n` (`\\n`) and double-escaped `\\\\n` into actual newlines `\n`
@@ -78,12 +114,15 @@ export function isGoogleCalendarConfigured(): boolean {
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env["GOOGLE_SERVICE_ACCOUNT_JSON"]) {
     return true;
   }
-  const clientEmail =
+  const clientEmail = sanitizeClientEmail(
     process.env.GOOGLE_CLIENT_EMAIL ||
-    process.env["GOOGLE_CLIENT_EMAIL"] ||
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"];
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n") || process.env["GOOGLE_PRIVATE_KEY"]?.replace(/\\n/g, "\n");
+      process.env["GOOGLE_CLIENT_EMAIL"] ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"],
+  );
+  const privateKey =
+    process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n") ||
+    process.env["GOOGLE_PRIVATE_KEY"]?.replace(/\\n/g, "\n");
   return Boolean(clientEmail && privateKey);
 }
 
@@ -91,20 +130,24 @@ export function isGoogleCalendarConfigured(): boolean {
  * Parses and retrieves Google Calendar credentials from server environment variables:
  * - process.env.GOOGLE_CLIENT_EMAIL
  * - process.env.GOOGLE_PRIVATE_KEY (with .replace(/\\n/g, '\n'))
- * - process.env.GOOGLE_CALENDAR_ID
+ * - process.env.GOOGLE_CALENDAR_ID (with .trim())
  */
 export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials | null {
-  const jsonEnv = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env["GOOGLE_SERVICE_ACCOUNT_JSON"];
-  let clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL ||
-    process.env["GOOGLE_CLIENT_EMAIL"] ||
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] ||
+  const jsonEnv =
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env["GOOGLE_SERVICE_ACCOUNT_JSON"];
+  let rawClientEmail =
+    process.env.GOOGLE_CLIENT_EMAIL?.trim() ||
+    process.env["GOOGLE_CLIENT_EMAIL"]?.trim() ||
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() ||
+    process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"]?.trim() ||
     "";
   const envPrivateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  let privateKey = envPrivateKey || process.env["GOOGLE_PRIVATE_KEY"]?.replace(/\\n/g, "\n") || "";
-  let calendarId =
-    process.env.GOOGLE_CALENDAR_ID || process.env["GOOGLE_CALENDAR_ID"] || "primary";
+  let privateKey =
+    envPrivateKey || process.env["GOOGLE_PRIVATE_KEY"]?.replace(/\\n/g, "\n") || "";
+  let rawCalendarId =
+    process.env.GOOGLE_CALENDAR_ID?.trim() ||
+    process.env["GOOGLE_CALENDAR_ID"]?.trim() ||
+    "";
 
   if (jsonEnv) {
     try {
@@ -118,13 +161,13 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
 
       if (parsed && typeof parsed === "object") {
         if (typeof parsed["client_email"] === "string") {
-          clientEmail = parsed["client_email"];
+          rawClientEmail = parsed["client_email"].trim();
         }
         if (typeof parsed["private_key"] === "string") {
           privateKey = parsed["private_key"].replace(/\\n/g, "\n");
         }
         if (typeof parsed["calendar_id"] === "string") {
-          calendarId = parsed["calendar_id"];
+          rawCalendarId = parsed["calendar_id"].trim();
         }
       }
     } catch (parseErr) {
@@ -132,8 +175,8 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
     }
   }
 
-  clientEmail = clientEmail.trim().replace(/^[\s"',]+|[\s"',]+$/g, "");
-  calendarId = calendarId.trim().replace(/^[\s"',]+|[\s"',]+$/g, "") || "primary";
+  const clientEmail = sanitizeClientEmail(rawClientEmail);
+  const calendarId = sanitizeCalendarId(rawCalendarId);
 
   if (!clientEmail || !privateKey) {
     return null;
@@ -141,7 +184,7 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
 
   const normalizedKey = normalizePrivateKey(privateKey);
 
-  const timeZone = process.env.GOOGLE_CALENDAR_TIMEZONE || "Asia/Nicosia";
+  const timeZone = process.env.GOOGLE_CALENDAR_TIMEZONE?.trim() || "Asia/Nicosia";
   const rawDuration = Number(process.env.GOOGLE_CALENDAR_DEFAULT_DURATION_MINUTES);
   const defaultDurationMinutes = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 60;
 
@@ -318,10 +361,12 @@ function stringToBase64Url(str: string): string {
 
 /**
  * Obtains an OAuth2 bearer token from Google's token endpoint using the Service Account credentials.
+ * Uses scopes: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events']
  */
 export async function getGoogleAccessToken(
   clientEmail: string,
   privateKey: string,
+  scopes: string[] = GOOGLE_CALENDAR_SCOPES,
 ): Promise<string> {
   const nowInSeconds = Math.floor(Date.now() / 1000);
 
@@ -335,8 +380,8 @@ export async function getGoogleAccessToken(
   };
 
   const claimSet = {
-    iss: clientEmail,
-    scope: "https://www.googleapis.com/auth/calendar",
+    iss: sanitizeClientEmail(clientEmail),
+    scope: scopes.join(" "),
     aud: "https://oauth2.googleapis.com/token",
     exp: nowInSeconds + 3600,
     iat: nowInSeconds,
@@ -388,6 +433,8 @@ export async function createGoogleCalendarEvent(
   data: GoogleCalendarEventData,
 ): Promise<GoogleCalendarResult> {
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const rawCalendarIdEnv =
+    process.env.GOOGLE_CALENDAR_ID?.trim() || process.env["GOOGLE_CALENDAR_ID"]?.trim();
 
   if (!isGoogleCalendarConfigured()) {
     const missingVars = [
@@ -395,7 +442,7 @@ export async function createGoogleCalendarEvent(
         ? ["GOOGLE_CLIENT_EMAIL"]
         : []),
       ...(!privateKey ? ["GOOGLE_PRIVATE_KEY"] : []),
-      ...(!process.env.GOOGLE_CALENDAR_ID ? ["GOOGLE_CALENDAR_ID"] : []),
+      ...(!rawCalendarIdEnv ? ["GOOGLE_CALENDAR_ID"] : []),
     ];
     console.info(
       "[Google Calendar Service] Google Calendar credentials not configured. Calendar sync skipped. " +
@@ -418,6 +465,18 @@ export async function createGoogleCalendarEvent(
   }
 
   try {
+    // 1. Sanitization: .trim() and clean any hidden whitespace/newlines/quotes
+    const calendarId = sanitizeCalendarId(
+      process.env.GOOGLE_CALENDAR_ID?.trim() || credentials.calendarId?.trim(),
+    );
+
+    // 2. Pre-flight Validation: stop execution and throw error if calendarId is undefined or empty
+    if (!calendarId) {
+      throw new Error(
+        "Google Calendar Pre-flight Validation Failed: calendarId (process.env.GOOGLE_CALENDAR_ID) is undefined or empty.",
+      );
+    }
+
     const duration = data.durationMinutes || credentials.defaultDurationMinutes;
     const times = calculateEventTimes(
       data.appointmentDate,
@@ -449,22 +508,27 @@ export async function createGoogleCalendarEvent(
     const accessToken = await getGoogleAccessToken(
       credentials.clientEmail,
       resolvedPrivateKey,
+      GOOGLE_CALENDAR_SCOPES,
     );
 
     const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      credentials.calendarId,
+      calendarId,
     )}/events`;
 
     // calendar.events.insert helper
     const calendar = {
       events: {
         insert: async ({
+          calendarId: targetCalendarId,
           requestBody,
         }: {
           calendarId: string;
           requestBody: Record<string, unknown>;
         }) => {
-          return fetch(calendarUrl, {
+          const targetUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+            targetCalendarId,
+          )}/events`;
+          return fetch(targetUrl, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -476,13 +540,20 @@ export async function createGoogleCalendarEvent(
       },
     };
 
+    // 3. Targeted Debugging right before calendar.events.insert
+    console.log("--- GOOGLE CALENDAR DEBUG --- ID:", `[${calendarId}]`);
+
     let response = await calendar.events.insert({
-      calendarId: credentials.calendarId,
+      calendarId,
       requestBody: eventPayload,
     });
 
     // Fallback if attendees were supplied and rejected by service account policy (400 or 403)
-    if (!response.ok && (response.status === 400 || response.status === 403) && eventPayload["attendees"]) {
+    if (
+      !response.ok &&
+      (response.status === 400 || response.status === 403) &&
+      eventPayload["attendees"]
+    ) {
       const errBody = await response.clone().text();
       console.warn(
         "[Google Calendar Service] Retrying calendar.events.insert without external attendees list:",
@@ -490,7 +561,7 @@ export async function createGoogleCalendarEvent(
       );
       delete eventPayload["attendees"];
       response = await calendar.events.insert({
-        calendarId: credentials.calendarId,
+        calendarId,
         requestBody: eventPayload,
       });
     }
@@ -498,7 +569,7 @@ export async function createGoogleCalendarEvent(
     if (!response.ok) {
       const errorText = await response.text();
       const apiError = new Error(
-        `Google Calendar API error (${response.status}) for calendar "${credentials.calendarId}" with service account "${credentials.clientEmail}": ${errorText}`,
+        `Google Calendar API error (${response.status}) for calendar [${calendarId}] with service account [${credentials.clientEmail}] (URL: ${calendarUrl}): ${errorText}`,
       );
       console.error("GOOGLE CALENDAR ERROR:", apiError);
       return {
