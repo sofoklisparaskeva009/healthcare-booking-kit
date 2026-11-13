@@ -248,10 +248,7 @@ export const createBooking = createServerFn({ method: "POST" })
       });
 
       if (!calResult.ok) {
-        console.error(
-          `[createBooking] ⚠️ Google Calendar sync failed for booking #${row.id}:`,
-          calResult.error,
-        );
+        console.error("GOOGLE CALENDAR ERROR:", calResult.error);
       } else if (calResult.skipped) {
         console.info(
           `[createBooking] ℹ️ Google Calendar sync skipped for booking #${row.id} (credentials not configured).`,
@@ -261,8 +258,8 @@ export const createBooking = createServerFn({ method: "POST" })
           `[createBooking] ✅ Google Calendar event created for booking #${row.id} (Event ID: ${calResult.eventId})`,
         );
       }
-    } catch (calErr) {
-      console.error("[createBooking] Google Calendar dispatch error:", calErr);
+    } catch (error) {
+      console.error("GOOGLE CALENDAR ERROR:", error);
     }
 
     try {
