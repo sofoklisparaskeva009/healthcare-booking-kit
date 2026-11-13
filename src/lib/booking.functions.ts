@@ -232,19 +232,35 @@ export const createBooking = createServerFn({ method: "POST" })
 
     try {
       const { createGoogleCalendarEvent } = await import("./googleCalendar.server");
-      await createGoogleCalendarEvent({
+      const calResult = await createGoogleCalendarEvent({
         bookingId: row.id,
         patientName: data.fullName,
         patientEmail: data.email,
         patientPhone: data.phone,
-        serviceName: service.name,
+        serviceName: localizedServiceName,
         appointmentType: data.appointmentType,
         appointmentDate: data.date,
         appointmentTime: data.time,
         durationMinutes: service.duration ?? 60,
         privateFee,
         notes: data.notes || undefined,
+        preferredLanguage,
       });
+
+      if (!calResult.ok) {
+        console.error(
+          `[createBooking] ⚠️ Google Calendar sync failed for booking #${row.id}:`,
+          calResult.error,
+        );
+      } else if (calResult.skipped) {
+        console.info(
+          `[createBooking] ℹ️ Google Calendar sync skipped for booking #${row.id} (credentials not configured).`,
+        );
+      } else {
+        console.info(
+          `[createBooking] ✅ Google Calendar event created for booking #${row.id} (Event ID: ${calResult.eventId})`,
+        );
+      }
     } catch (calErr) {
       console.error("[createBooking] Google Calendar dispatch error:", calErr);
     }

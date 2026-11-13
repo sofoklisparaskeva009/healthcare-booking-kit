@@ -17,6 +17,7 @@ describe("Google Calendar Integration", () => {
     vi.resetModules();
     resetCachedAccessToken();
     process.env = { ...originalEnv };
+    delete process.env["GOOGLE_CLIENT_EMAIL"];
     delete process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"];
     delete process.env["GOOGLE_PRIVATE_KEY"];
     delete process.env["GOOGLE_CALENDAR_ID"];
@@ -42,6 +43,7 @@ describe("Google Calendar Integration", () => {
     durationMinutes: 60,
     privateFee: null,
     notes: "Suffering from acute lower back pain.",
+    preferredLanguage: "el",
   };
 
   describe("Configuration & Environment Detection", () => {
@@ -50,17 +52,18 @@ describe("Google Calendar Integration", () => {
       expect(getGoogleCalendarCredentials()).toBeNull();
     });
 
-    it("reports configured when email and private key are present", () => {
-      process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
+    it("reports configured when GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_CALENDAR_ID are present", () => {
+      process.env["GOOGLE_CLIENT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
       process.env["GOOGLE_PRIVATE_KEY"] =
         "-----BEGIN PRIVATE KEY-----\\nMIIEvgIBADAN...\\n-----END PRIVATE KEY-----";
+      process.env["GOOGLE_CALENDAR_ID"] = "clinic@group.calendar.google.com";
 
       expect(isGoogleCalendarConfigured()).toBe(true);
       const creds = getGoogleCalendarCredentials();
       expect(creds).not.toBeNull();
       expect(creds?.clientEmail).toBe("bot@example.iam.gserviceaccount.com");
       expect(creds?.privateKey).toContain("\n");
-      expect(creds?.calendarId).toBe("primary");
+      expect(creds?.calendarId).toBe("clinic@group.calendar.google.com");
       expect(creds?.timeZone).toBe("Asia/Nicosia");
       expect(creds?.defaultDurationMinutes).toBe(60);
     });
@@ -93,22 +96,22 @@ describe("Google Calendar Integration", () => {
   });
 
   describe("Event Formatting", () => {
-    it("formats event title as 'Appointment: [Patient Name] - [Service]'", () => {
+    it("formats event title as 'Ραντεβού: [Όνομα Ασθενούς] - [Υπηρεσία]'", () => {
       const title = formatEventSummary("Andreas Ioannou", "Initial Consultation");
-      expect(title).toBe("Appointment: Andreas Ioannou - Initial Consultation");
+      expect(title).toBe("Ραντεβού: Andreas Ioannou - Initial Consultation");
     });
 
     it("formats event description with all required patient and clinic details for GeSY", () => {
       const description = formatEventDescription(mockBookingData);
 
       expect(description).toContain("Andreas Ioannou");
-      expect(description).toContain("+357 99 876543");
-      expect(description).toContain("andreas@example.com");
+      expect(description).toContain("Τηλέφωνο: +357 99 876543");
+      expect(description).toContain("Email: andreas@example.com");
+      expect(description).toContain("Γλώσσα προτίμησης: Ελληνικά (GR)");
+      expect(description).toContain("Σχόλια: Suffering from acute lower back pain.");
       expect(description).toContain("Initial Consultation");
-      expect(description).toContain("Covered by GeSY (With Referral / ΓεΣΥ)");
-      expect(description).toContain("Suffering from acute lower back pain.");
-      expect(description).toContain("Booking Reference: #test-booking-id-12345");
-      expect(description).toContain("CLINIC LOCATION");
+      expect(description).toContain("ΓεΣΥ (Covered by GeSY)");
+      expect(description).toContain("Κωδικός Κράτησης: #test-booking-id-12345");
     });
 
     it("formats event description correctly for Private visits with fee", () => {
@@ -117,11 +120,13 @@ describe("Google Calendar Integration", () => {
         appointmentType: "private",
         privateFee: 60,
         notes: "",
+        preferredLanguage: "en",
       };
       const description = formatEventDescription(privateData);
 
-      expect(description).toContain("Private Visit (Ιδιωτική Επίσκεψη) · €60");
-      expect(description).toContain("None provided");
+      expect(description).toContain("Ιδιωτική Επίσκεψη (Private Visit) · €60");
+      expect(description).toContain("Γλώσσα προτίμησης: English (EN)");
+      expect(description).toContain("Σχόλια: Κανένα σχόλιο");
     });
   });
 

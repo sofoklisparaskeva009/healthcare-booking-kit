@@ -12,6 +12,7 @@ export interface GoogleCalendarEventData {
   durationMinutes?: number | undefined;
   privateFee?: number | null | undefined;
   notes?: string | undefined;
+  preferredLanguage?: "el" | "en" | string | undefined;
 }
 
 export interface GoogleCalendarResult {
@@ -41,22 +42,30 @@ export function resetCachedAccessToken(): void {
 
 /**
  * Checks whether Google Calendar credentials are configured in the environment.
+ * Supports GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_CALENDAR_ID.
  */
 export function isGoogleCalendarConfigured(): boolean {
-  if (process.env["GOOGLE_SERVICE_ACCOUNT_JSON"]) {
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     return true;
   }
-  return Boolean(process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] && process.env["GOOGLE_PRIVATE_KEY"]);
+  const clientEmail =
+    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  return Boolean(clientEmail && privateKey);
 }
 
 /**
- * Parses and retrieves Google Calendar credentials from environment variables.
+ * Parses and retrieves Google Calendar credentials from server environment variables:
+ * - process.env.GOOGLE_CLIENT_EMAIL
+ * - process.env.GOOGLE_PRIVATE_KEY (with .replace(/\\n/g, '\n'))
+ * - process.env.GOOGLE_CALENDAR_ID
  */
 export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials | null {
-  const jsonEnv = process.env["GOOGLE_SERVICE_ACCOUNT_JSON"];
-  let clientEmail = process.env["GOOGLE_SERVICE_ACCOUNT_EMAIL"] || "";
-  let privateKey = process.env["GOOGLE_PRIVATE_KEY"] || "";
-  let calendarId = process.env["GOOGLE_CALENDAR_ID"] || "primary";
+  const jsonEnv = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  let clientEmail =
+    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY || "";
+  let calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
 
   if (jsonEnv) {
     try {
@@ -87,6 +96,9 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
     }
   }
 
+  clientEmail = clientEmail.trim().replace(/^["']|["']$/g, "");
+  calendarId = calendarId.trim().replace(/^["']|["']$/g, "") || "primary";
+
   if (!clientEmail || !privateKey) {
     return null;
   }
@@ -97,8 +109,8 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
     .replace(/\\n/g, "\n")
     .trim();
 
-  const timeZone = process.env["GOOGLE_CALENDAR_TIMEZONE"] || "Asia/Nicosia";
-  const rawDuration = Number(process.env["GOOGLE_CALENDAR_DEFAULT_DURATION_MINUTES"]);
+  const timeZone = process.env.GOOGLE_CALENDAR_TIMEZONE || "Asia/Nicosia";
+  const rawDuration = Number(process.env.GOOGLE_CALENDAR_DEFAULT_DURATION_MINUTES);
   const defaultDurationMinutes = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 60;
 
   return {
@@ -112,41 +124,40 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
 
 /**
  * Formats the calendar event summary / title.
- * Format: "Appointment: [Patient Name] - [Service]"
+ * Format: 'Ραντεβού: [Όνομα Ασθενούς] - [Υπηρεσία]'
  */
 export function formatEventSummary(patientName: string, serviceName: string): string {
-  return `Appointment: ${patientName} - ${serviceName}`;
+  return `Ραντεβού: ${patientName} - ${serviceName}`;
 }
 
 /**
- * Formats the event description including patient details, phone, email, GeSY status, and notes.
+ * Formats the event description including Phone, Email, Preferred Language, and Comments/Notes.
  */
 export function formatEventDescription(data: GoogleCalendarEventData): string {
+  const langLabel =
+    data.preferredLanguage === "en" ? "English (EN)" : "Ελληνικά (GR)";
+
   const gesyStatus =
     data.appointmentType === "gesy"
-      ? "Covered by GeSY (With Referral / ΓεΣΥ)"
+      ? "ΓεΣΥ (Covered by GeSY)"
       : data.privateFee !== null && data.privateFee !== undefined
-        ? `Private Visit (Ιδιωτική Επίσκεψη) · €${data.privateFee}`
-        : "Private Visit (Ιδιωτική Επίσκεψη) · Fee on request";
+        ? `Ιδιωτική Επίσκεψη (Private Visit) · €${data.privateFee}`
+        : "Ιδιωτική Επίσκεψη (Private Visit)";
 
-  const notesContent = data.notes && data.notes.trim() ? data.notes.trim() : "None provided";
+  const notesContent = data.notes && data.notes.trim() ? data.notes.trim() : "Κανένα σχόλιο";
 
   return [
-    `📅 CLINIC APPOINTMENT DETAILS`,
-    `----------------------------------------`,
-    `Patient Name: ${data.patientName}`,
-    `Phone: ${data.patientPhone}`,
+    `Τηλέφωνο: ${data.patientPhone}`,
     `Email: ${data.patientEmail}`,
-    `Service: ${data.serviceName}`,
-    `Coverage / Type: ${gesyStatus}`,
-    `Booking Reference: #${data.bookingId}`,
+    `Γλώσσα προτίμησης: ${langLabel}`,
+    `Σχόλια: ${notesContent}`,
     ``,
-    `📝 PATIENT NOTES:`,
-    `${notesContent}`,
-    ``,
-    `📍 CLINIC LOCATION:`,
-    `${clinicConfig.contact.address.full}`,
-    `Contact Phone: ${clinicConfig.contact.phone}`,
+    `----------------------------------------`,
+    `Ασθενής: ${data.patientName}`,
+    `Υπηρεσία: ${data.serviceName}`,
+    `Κατηγορία: ${gesyStatus}`,
+    `Κωδικός Κράτησης: #${data.bookingId}`,
+    `Τοποθεσία: ${clinicConfig.contact.address.full}`,
   ].join("\n");
 }
 
@@ -292,7 +303,7 @@ export async function getGoogleAccessToken(
 
   const claimSet = {
     iss: clientEmail,
-    scope: "https://www.googleapis.com/auth/calendar.events",
+    scope: "https://www.googleapis.com/auth/calendar",
     aud: "https://oauth2.googleapis.com/token",
     exp: nowInSeconds + 3600,
     iat: nowInSeconds,
@@ -301,7 +312,7 @@ export async function getGoogleAccessToken(
   const unsignedToken = `${stringToBase64Url(JSON.stringify(header))}.${stringToBase64Url(
     JSON.stringify(claimSet),
   )}`;
-  const signature = await signRS256(unsignedToken, privateKey);
+  const signature = await signRS256(unsignedToken, privateKey.replace(/\\n/g, "\n"));
   const assertion = `${unsignedToken}.${signature}`;
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -346,7 +357,7 @@ export async function createGoogleCalendarEvent(
   if (!isGoogleCalendarConfigured()) {
     console.info(
       "[Google Calendar Service] Google Calendar credentials not configured. Calendar sync skipped. " +
-        "Define GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY (or GOOGLE_SERVICE_ACCOUNT_JSON), and GOOGLE_CALENDAR_ID in .env to enable automated Google Calendar syncing.",
+        "Define GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_CALENDAR_ID in .env to enable automated Google Calendar syncing.",
     );
     return { ok: true, skipped: true };
   }
@@ -383,22 +394,13 @@ export async function createGoogleCalendarEvent(
         dateTime: times.endDateTime,
         timeZone: times.timeZone,
       },
-      attendees: [
-        {
-          email: data.patientEmail,
-          displayName: data.patientName,
-        },
-      ],
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: "email", minutes: 24 * 60 },
-          { method: "popup", minutes: 30 },
-        ],
-      },
+      attendees: [{ email: data.patientEmail, displayName: data.patientName }],
     };
 
-    const accessToken = await getGoogleAccessToken(credentials.clientEmail, credentials.privateKey);
+    const accessToken = await getGoogleAccessToken(
+      credentials.clientEmail,
+      credentials.privateKey.replace(/\\n/g, "\n"),
+    );
 
     const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
       credentials.calendarId,
@@ -413,7 +415,7 @@ export async function createGoogleCalendarEvent(
       body: JSON.stringify(eventPayload),
     });
 
-    // If attendees cannot be added due to permission/domain constraints, retry without attendees
+    // Fallback if attendees were supplied and rejected by service account policy
     if (!response.ok && (response.status === 400 || response.status === 403)) {
       const errBody = await response.clone().text();
       if (errBody.toLowerCase().includes("attendee") || errBody.toLowerCase().includes("guest")) {
