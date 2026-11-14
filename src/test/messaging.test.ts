@@ -237,17 +237,20 @@ describe("renderBookingConfirmationMessage", () => {
     expect(body).toContain("€50");
   });
 
-  it("includes Accept and Cancel action labels in Greek", () => {
-    const { actions } = renderBookingConfirmationMessage(sampleBooking);
-    const labels = actions.map((a) => a.label);
-    expect(labels.some((l) => l.includes("Επιβεβαίωση") || l.includes("Confirm"))).toBe(true);
-    expect(labels.some((l) => l.includes("Ακύρωση") || l.includes("Cancel"))).toBe(true);
+  it("renders informational-only Greek message with 48h reminder notice and no Confirm/Cancel actions", () => {
+    const { body, actions } = renderBookingConfirmationMessage(sampleBooking);
+    expect(body).toContain("Το ραντεβού σας καταχωρήθηκε επιτυχώς για τις");
+    expect(body).toContain("Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.");
+    expect(body).not.toContain("/api/messaging/webhook");
+    expect(actions).toEqual([]);
   });
 
-  it("renders English locale when specified", () => {
-    const { body } = renderBookingConfirmationMessage({ ...sampleBooking, locale: "en" });
-    expect(body).toContain("Appointment Confirmation");
-    expect(body).toContain("Confirm:");
+  it("renders English locale when specified (informational-only)", () => {
+    const { body, actions } = renderBookingConfirmationMessage({ ...sampleBooking, locale: "en" });
+    expect(body).toContain("Your appointment has been successfully booked for");
+    expect(body).toContain("You will receive a reminder message 48 hours prior.");
+    expect(body).not.toContain("/api/messaging/webhook");
+    expect(actions).toEqual([]);
   });
 
   it("includes shortened booking reference (first 8 chars)", () => {

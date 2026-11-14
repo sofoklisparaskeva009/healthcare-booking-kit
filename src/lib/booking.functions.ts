@@ -210,26 +210,7 @@ export const createBooking = createServerFn({ method: "POST" })
       row = { id: `preview-${Date.now()}` };
     }
 
-    try {
-      const { sendBookingEmails } = await import("./email.server");
-      await sendBookingEmails({
-        bookingId: row.id,
-        patientName: data.fullName,
-        patientEmail: data.email,
-        patientPhone: data.phone,
-        serviceName: localizedServiceName,
-        canonicalServiceName: service.name,
-        appointmentType: data.appointmentType,
-        appointmentDate: data.date,
-        appointmentTime: data.time,
-        privateFee,
-        notes: data.notes || undefined,
-        locale: preferredLanguage,
-      });
-    } catch (emailErr) {
-      console.error("[createBooking] Email dispatch error:", emailErr);
-    }
-
+    // 1. Immediately create the Google Calendar event right after saving the booking in Supabase
     try {
       const { createGoogleCalendarEvent } = await import("./googleCalendar.server");
       const calResult = await createGoogleCalendarEvent({
@@ -260,6 +241,27 @@ export const createBooking = createServerFn({ method: "POST" })
       }
     } catch (error) {
       console.error("GOOGLE CALENDAR ERROR:", error);
+    }
+
+    // 2. Send informational booking email via Resend
+    try {
+      const { sendBookingEmails } = await import("./email.server");
+      await sendBookingEmails({
+        bookingId: row.id,
+        patientName: data.fullName,
+        patientEmail: data.email,
+        patientPhone: data.phone,
+        serviceName: localizedServiceName,
+        canonicalServiceName: service.name,
+        appointmentType: data.appointmentType,
+        appointmentDate: data.date,
+        appointmentTime: data.time,
+        privateFee,
+        notes: data.notes || undefined,
+        locale: preferredLanguage,
+      });
+    } catch (emailErr) {
+      console.error("[createBooking] Email dispatch error:", emailErr);
     }
 
     try {

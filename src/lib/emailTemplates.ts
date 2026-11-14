@@ -53,13 +53,13 @@ function formatDate(dateStr: string, locale: Locale = "en"): string {
 
 const PATIENT_EMAIL_STRINGS = {
   el: {
-    subject: (doctor: string) => `Επιβεβαίωση Ραντεβού — ${doctor}`,
-    heading: "Επιβεβαίωση Ραντεβού",
+    subject: (doctor: string) => `Καταχώρηση Ραντεβού — ${doctor}`,
+    heading: "Καταχώρηση Ραντεβού",
     greeting: (name: string) => `Αγαπητέ/ή ${name},`,
-    introText: (doctor: string) =>
-      `Σας ευχαριστούμε που κλείσατε ραντεβού με ${doctor}. Το αίτημά σας καταχωρήθηκε με επιτυχία.`,
-    introHtml: (doctor: string) =>
-      `Το ραντεβού σας με <strong>${doctor}</strong> καταχωρήθηκε με επιτυχία. Ακολουθούν οι λεπτομέρειες της επίσκεψής σας:`,
+    introText: (dateTime: string) =>
+      `Το ραντεβού σας καταχωρήθηκε επιτυχώς για τις ${dateTime}. Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.`,
+    introHtml: (doctor: string, dateTime: string) =>
+      `Το ραντεβού σας με <strong>${doctor}</strong> καταχωρήθηκε επιτυχώς για τις <strong>${dateTime}</strong>. Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.`,
     summaryHeading: "ΣΥΝΟΨΗ ΡΑΝΤΕΒΟΥ",
     doctor: "Θεραπευτής",
     service: "Υπηρεσία",
@@ -77,19 +77,17 @@ const PATIENT_EMAIL_STRINGS = {
       "Παρακαλούμε να έχετε μαζί σας την ταυτότητα / κάρτα δικαιούχου ΓεΣΥ και το έγκυρο παραπεμπτικό του ιατρού σας.",
     prepTitle: "ΠΡΟΕΤΟΙΜΑΣΙΑ",
     prepNote: "Παρακαλούμε να προσέλθετε 5-10 λεπτά πριν από την ώρα του ραντεβού σας.",
-    reschedule:
-      "Χρειάζεται αλλαγή ή ακύρωση; Παρακαλούμε επικοινωνήστε με την κλινική τουλάχιστον 24 ώρες νωρίτερα, ώστε να εξυπηρετηθεί άλλος ασθενής.",
     signOff: "Με εκτίμηση,",
     rights: "Με την επιφύλαξη παντός δικαιώματος.",
   },
   en: {
-    subject: (doctor: string) => `Appointment Confirmation — ${doctor}`,
-    heading: "Appointment Confirmation",
+    subject: (doctor: string) => `Appointment Booked — ${doctor}`,
+    heading: "Appointment Booked",
     greeting: (name: string) => `Dear ${name},`,
-    introText: (doctor: string) =>
-      `Thank you for booking with ${doctor}. Your appointment request has been successfully received.`,
-    introHtml: (doctor: string) =>
-      `Your appointment with <strong>${doctor}</strong> has been successfully booked. Below are the details of your visit:`,
+    introText: (dateTime: string) =>
+      `Your appointment has been successfully booked for ${dateTime}. You will receive a reminder message 48 hours prior.`,
+    introHtml: (doctor: string, dateTime: string) =>
+      `Your appointment with <strong>${doctor}</strong> has been successfully booked for <strong>${dateTime}</strong>. You will receive a reminder message 48 hours prior.`,
     summaryHeading: "APPOINTMENT SUMMARY",
     doctor: "Doctor",
     service: "Service",
@@ -107,8 +105,6 @@ const PATIENT_EMAIL_STRINGS = {
       "Please remember to bring your valid ID / GeSY beneficiary card and any valid referral document from your doctor to your appointment.",
     prepTitle: "PREPARATION",
     prepNote: "Please arrive 5-10 minutes before your scheduled appointment time.",
-    reschedule:
-      "Need to reschedule or cancel? Please contact our clinic at least 24 hours in advance so we can assist other patients.",
     signOff: "Warm regards,",
     rights: "All rights reserved.",
   },
@@ -120,6 +116,10 @@ export function renderPatientConfirmationEmail(data: BookingEmailData) {
   const { doctor, contact } = clinicConfig;
   const specialty = getLocalizedClinic(locale).specialty;
   const formattedDate = formatDate(data.appointmentDate, locale);
+  const dateTimeLabel =
+    locale === "el"
+      ? `${formattedDate} στις ${data.appointmentTime}`
+      : `${formattedDate} at ${data.appointmentTime}`;
   const isGesy = data.appointmentType === "gesy";
   const feeLabel = formatCoverageLabel(data.appointmentType, data.privateFee, locale);
   const categoryLabel = getAppointmentTypeLabel(data.appointmentType, locale);
@@ -130,7 +130,7 @@ export function renderPatientConfirmationEmail(data: BookingEmailData) {
   const text = `
 ${s.greeting(data.patientName)}
 
-${s.introText(doctor.name)}
+${s.introText(dateTimeLabel)}
 
 ${s.summaryHeading}
 -------------------
@@ -149,8 +149,6 @@ ${s.phone}: ${contact.phone}
 ${s.email}: ${contact.email}
 
 ${isGesy ? `${s.gesyNoteTitle.toUpperCase()}:\n${s.gesyNote}` : `${s.prepTitle}:\n${s.prepNote}`}
-
-${s.reschedule}
 
 ${s.signOff}
 ${doctor.name}
@@ -190,7 +188,7 @@ ${contact.phone} | ${contact.email}
               <h2 style="margin:0 0 16px;font-size:20px;color:#0f172a;font-weight:600;">${s.heading}</h2>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;">
                 ${s.greeting(`<strong>${escapeHtml(data.patientName)}</strong>`)}<br>
-                ${s.introHtml(doctor.name)}
+                ${s.introHtml(doctor.name, escapeHtml(dateTimeLabel))}
               </p>
 
               <!-- Appointment Card -->
@@ -230,12 +228,8 @@ ${contact.phone} | ${contact.email}
               <p style="margin:0 0 6px;font-size:14px;color:#475569;">
                 <strong>${s.phone}:</strong> <a href="${contact.phoneHref}" style="color:#1e4338;text-decoration:none;font-weight:600;">${contact.phone}</a>
               </p>
-              <p style="margin:0 0 24px;font-size:14px;color:#475569;">
+              <p style="margin:0;font-size:14px;color:#475569;">
                 <strong>${s.email}:</strong> <a href="${contact.emailHref}" style="color:#1e4338;text-decoration:none;">${contact.email}</a>
-              </p>
-
-              <p style="margin:0;font-size:13px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:20px;">
-                ${s.reschedule}
               </p>
             </td>
           </tr>

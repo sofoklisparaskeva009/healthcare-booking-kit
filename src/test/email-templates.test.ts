@@ -22,9 +22,11 @@ describe("Email Templates", () => {
 
   it("renders Greek patient confirmation email by default (locale: el)", () => {
     const email = renderPatientConfirmationEmail(sampleData);
-    expect(email.subject).toContain("Επιβεβαίωση Ραντεβού");
+    expect(email.subject).toContain("Καταχώρηση Ραντεβού");
     expect(email.subject).toContain(clinicConfig.doctor.name);
     expect(email.text).toContain("Αγαπητέ/ή Andreas Dimitriou");
+    expect(email.text).toContain("Το ραντεβού σας καταχωρήθηκε επιτυχώς για τις");
+    expect(email.text).toContain("Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.");
     expect(email.text).toContain("Initial Consultation");
     expect(email.text).toContain("10:00");
     expect(email.text).toContain(clinicConfig.contact.address.full);
@@ -35,9 +37,11 @@ describe("Email Templates", () => {
 
   it("renders English patient confirmation email when locale is 'en'", () => {
     const email = renderPatientConfirmationEmail({ ...sampleData, locale: "en" });
-    expect(email.subject).toContain("Appointment Confirmation");
+    expect(email.subject).toContain("Appointment Booked");
     expect(email.subject).toContain(clinicConfig.doctor.name);
     expect(email.text).toContain("Dear Andreas Dimitriou");
+    expect(email.text).toContain("Your appointment has been successfully booked for");
+    expect(email.text).toContain("You will receive a reminder message 48 hours prior.");
     expect(email.text).toContain("Initial Consultation");
     expect(email.text).toContain("10:00");
     expect(email.html).toContain('lang="en"');

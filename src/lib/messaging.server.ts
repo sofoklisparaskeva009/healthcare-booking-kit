@@ -276,8 +276,9 @@ export interface RenderedMessage {
 }
 
 /**
- * Renders a localized booking confirmation message body with Accept / Cancel
- * interactive options. Greek is used by default (matching the clinic config).
+ * Renders a localized informational-only booking message body.
+ * No confirmation or cancellation prompts/links are included upon initial booking;
+ * patients are informed that they will receive a reminder message 48 hours prior.
  */
 export function renderBookingConfirmationMessage(
   data: MessagingBookingData,
@@ -287,59 +288,41 @@ export function renderBookingConfirmationMessage(
   const shortDate = formatShortDate(data.appointmentDate, locale);
   const coverageLabel = formatCoverageLabel(data.appointmentType, data.privateFee, locale);
 
-  const urls = buildConfirmationUrls(data.bookingId, locale);
-
   if (locale === "el") {
+    const dateTimeLabel = `${shortDate} στις ${data.appointmentTime}`;
     const body = [
-      `📋 *Επιβεβαίωση Ραντεβού — ${doctor.name}*`,
+      `📋 ${doctor.name}`,
       ``,
       `Αγαπητέ/ή ${data.patientName},`,
+      `Το ραντεβού σας καταχωρήθηκε επιτυχώς για τις ${dateTimeLabel}. Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.`,
       ``,
-      `Το ραντεβού σας καταγράφηκε με επιτυχία:`,
       `• Υπηρεσία: ${data.serviceName}`,
-      `• Ημερομηνία: ${shortDate} στις ${data.appointmentTime}`,
       `• Κάλυψη: ${coverageLabel}`,
       `• Κωδικός: #${data.bookingId.slice(0, 8)}`,
-      ``,
-      `✅ Επιβεβαιώστε: ${urls.confirmUrl}`,
-      `❌ Ακύρωση: ${urls.cancelUrl}`,
-      ``,
-      `Επικοινωνία: ${clinicConfig.contact.phone}`,
     ].join("\n");
 
     return {
       body,
-      actions: [
-        { label: "✅ Επιβεβαίωση", action: "confirm" },
-        { label: "❌ Ακύρωση", action: "cancel" },
-      ],
+      actions: [],
     };
   }
 
   // English fallback
+  const dateTimeLabel = `${shortDate} at ${data.appointmentTime}`;
   const body = [
-    `📋 *Appointment Confirmation — ${doctor.name}*`,
+    `📋 ${doctor.name}`,
     ``,
     `Dear ${data.patientName},`,
+    `Your appointment has been successfully booked for ${dateTimeLabel}. You will receive a reminder message 48 hours prior.`,
     ``,
-    `Your appointment has been successfully registered:`,
     `• Service: ${data.serviceName}`,
-    `• Date: ${shortDate} at ${data.appointmentTime}`,
     `• Coverage: ${coverageLabel}`,
     `• Reference: #${data.bookingId.slice(0, 8)}`,
-    ``,
-    `✅ Confirm: ${urls.confirmUrl}`,
-    `❌ Cancel: ${urls.cancelUrl}`,
-    ``,
-    `Contact: ${clinicConfig.contact.phone}`,
   ].join("\n");
 
   return {
     body,
-    actions: [
-      { label: "✅ Confirm", action: "confirm" },
-      { label: "❌ Cancel", action: "cancel" },
-    ],
+    actions: [],
   };
 }
 
