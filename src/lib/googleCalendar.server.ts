@@ -566,6 +566,92 @@ export async function createGoogleCalendarEvent(
       });
     }
 
+    // Recovery & Diagnostics if Google Calendar API returns 404 Not Found:
+    // 1) Try adding calendarId to the Service Account's calendarList (accepts pending share)
+    // 2) Inspect users/me/calendarList to log all calendars visible to the Service Account
+    if (!response.ok && response.status === 404) {
+      delete eventPayload["attendees"];
+
+      try {
+        const subscribeRes = await fetch(
+          "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ id: calendarId }),
+          },
+        );
+
+        if (subscribeRes.ok) {
+          console.log(
+            "--- GOOGLE CALENDAR DEBUG --- Subscribed service account to shared calendar:",
+            `[${calendarId}]`,
+          );
+          response = await calendar.events.insert({
+            calendarId,
+            requestBody: eventPayload,
+          });
+        } else {
+          const subErrText = await subscribeRes.text();
+          console.warn(
+            `--- GOOGLE CALENDAR DEBUG --- Could not subscribe to [${calendarId}] (${subscribeRes.status}):`,
+            subErrText,
+          );
+        }
+      } catch (subErr) {
+        console.warn("--- GOOGLE CALENDAR DEBUG --- calendarList.insert failed:", subErr);
+      }
+
+      if (!response.ok && response.status === 404) {
+        try {
+          const listRes = await fetch(
+            "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            },
+          );
+          if (listRes.ok) {
+            const listData = (await listRes.json()) as {
+              items?: Array<{ id?: string; summary?: string; accessRole?: string }>;
+            };
+            const items = listData.items || [];
+            console.log(
+              "--- GOOGLE CALENDAR DEBUG --- Calendars visible to Service Account:",
+              JSON.stringify(
+                items.map((c) => ({ id: c.id, summary: c.summary, accessRole: c.accessRole })),
+              ),
+            );
+
+            // If user shared a sub-calendar (e.g. *@group.calendar.google.com) with writer/owner access, use it
+            const sharedWritableCalendar = items.find(
+              (c) =>
+                c.id &&
+                c.id !== credentials.clientEmail &&
+                (c.accessRole === "writer" || c.accessRole === "owner"),
+            );
+            if (sharedWritableCalendar?.id) {
+              console.log(
+                "--- GOOGLE CALENDAR DEBUG --- Retrying with discovered shared calendar ID:",
+                `[${sharedWritableCalendar.id}]`,
+              );
+              response = await calendar.events.insert({
+                calendarId: sharedWritableCalendar.id,
+                requestBody: eventPayload,
+              });
+            }
+          }
+        } catch (listErr) {
+          console.warn("--- GOOGLE CALENDAR DEBUG --- calendarList.list failed:", listErr);
+        }
+      }
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       const apiError = new Error(
