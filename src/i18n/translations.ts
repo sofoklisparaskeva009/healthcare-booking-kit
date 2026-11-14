@@ -61,7 +61,7 @@ const el = {
     fields: {
       fullName: { label: "Ονοματεπώνυμο", placeholder: "π.χ. Μαρία Γεωργίου" },
       phone: { label: "Αριθμός τηλεφώνου", placeholder: "π.χ. +357 99 123456" },
-      email: { label: "Διεύθυνση email", placeholder: "π.χ. maria@example.com" },
+      email: { label: "Διεύθυνση email (Προαιρετικό)", placeholder: "π.χ. maria@example.com" },
       notes: {
         label: "Σημειώσεις / Λόγος επίσκεψης (Προαιρετικό)",
         placeholder: "Αναφέρετε τυχόν συμπτώματα, πρόσφατο τραυματισμό ή στοιχεία παραπεμπτικού...",
@@ -170,7 +170,7 @@ const en: Dictionary = {
     fields: {
       fullName: { label: "Full Name", placeholder: "e.g. Maria Georgiou" },
       phone: { label: "Phone Number", placeholder: "e.g. +357 99 123456" },
-      email: { label: "Email Address", placeholder: "e.g. maria@example.com" },
+      email: { label: "Email Address (Optional)", placeholder: "e.g. maria@example.com" },
       notes: {
         label: "Notes / Reason for Visit (Optional)",
         placeholder: "Mention any symptoms, recent injury, or referral details...",

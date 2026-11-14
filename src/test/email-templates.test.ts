@@ -89,4 +89,13 @@ describe("Email Templates", () => {
     expect(clinicEmail.text).toContain("€60");
     expect(clinicEmail.html).toContain("€60");
   });
+
+  it("renders 'Δεν δηλώθηκε' in clinic notification email when patientEmail is empty", () => {
+    const clinicEmail = renderClinicNotificationEmail({
+      ...sampleData,
+      patientEmail: "",
+    });
+    expect(clinicEmail.text).toContain("Email: Δεν δηλώθηκε");
+    expect(clinicEmail.html).toContain("Δεν δηλώθηκε");
+  });
 });

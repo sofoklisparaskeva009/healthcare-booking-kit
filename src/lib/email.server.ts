@@ -38,36 +38,44 @@ export async function sendBookingEmails(data: BookingEmailData) {
   const fromEmail = process.env["RESEND_FROM_EMAIL"] || defaultFrom;
   const clinicRecipient = process.env["CLINIC_NOTIFICATION_EMAIL"] || clinicConfig.contact.email;
 
-  const patientTemplate = renderPatientConfirmationEmail(data);
   const clinicTemplate = renderClinicNotificationEmail(data);
+  const trimmedPatientEmail = data.patientEmail?.trim() || "";
 
   // Send both emails independently — a failure in one must not block the other.
-  let patientEmailStatus: "sent" | "failed" = "failed";
+  let patientEmailStatus: "sent" | "failed" | "skipped" = "skipped";
   let clinicEmailStatus: "sent" | "failed" = "failed";
 
-  try {
-    const patientResult = await resend.emails.send({
-      from: fromEmail,
-      to: [data.patientEmail],
-      subject: patientTemplate.subject,
-      text: patientTemplate.text,
-      html: patientTemplate.html,
-    });
-    if (patientResult.error) {
+  if (trimmedPatientEmail) {
+    patientEmailStatus = "failed";
+    try {
+      const patientTemplate = renderPatientConfirmationEmail(data);
+      const patientResult = await resend.emails.send({
+        from: fromEmail,
+        to: [trimmedPatientEmail],
+        subject: patientTemplate.subject,
+        text: patientTemplate.text,
+        html: patientTemplate.html,
+      });
+      if (patientResult.error) {
+        console.error(
+          `[Resend Email Service] ❌ Patient confirmation email rejected by Resend API (booking #${data.bookingId}):`,
+          patientResult.error,
+        );
+      } else {
+        console.info(
+          `[Resend Email Service] ✅ Patient confirmation email sent (id: ${patientResult.data?.id}) to ${trimmedPatientEmail}`,
+        );
+        patientEmailStatus = "sent";
+      }
+    } catch (err) {
       console.error(
-        `[Resend Email Service] ❌ Patient confirmation email rejected by Resend API (booking #${data.bookingId}):`,
-        patientResult.error,
+        `[Resend Email Service] ❌ Unexpected error sending patient confirmation email (booking #${data.bookingId}):`,
+        err instanceof Error ? err.message : err,
       );
-    } else {
-      console.info(
-        `[Resend Email Service] ✅ Patient confirmation email sent (id: ${patientResult.data?.id}) to ${data.patientEmail}`,
-      );
-      patientEmailStatus = "sent";
     }
-  } catch (err) {
-    console.error(
-      `[Resend Email Service] ❌ Unexpected error sending patient confirmation email (booking #${data.bookingId}):`,
-      err instanceof Error ? err.message : err,
+  } else {
+    console.info(
+      `[Resend Email Service] ℹ️ Patient did not provide an email address for booking #${data.bookingId}; skipping patient confirmation email.`,
     );
   }
 

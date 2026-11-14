@@ -86,6 +86,8 @@ export const createBooking = createServerFn({ method: "POST" })
       let insertedRow: { id: string } | null = null;
       let lastError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
 
+      const patientEmail = data.email?.trim() || "";
+
       tableLoop: for (const tableName of candidateTables) {
         const payloadToTry: Record<string, unknown> = {
           service: service.name,
@@ -96,7 +98,7 @@ export const createBooking = createServerFn({ method: "POST" })
           appointment_time: data.time,
           full_name: data.fullName,
           phone: data.phone,
-          email: data.email,
+          email: patientEmail,
           notes: data.notes || null,
           preferred_language: preferredLanguage,
         };
@@ -155,8 +157,8 @@ export const createBooking = createServerFn({ method: "POST" })
               } else if (missingCol === "patient_phone" && payloadToTry.patient_phone) {
                 payloadToTry.phone = data.phone;
                 delete payloadToTry.patient_phone;
-              } else if (missingCol === "email" && payloadToTry.email) {
-                payloadToTry.patient_email = data.email;
+              } else if (missingCol === "email" && "email" in payloadToTry) {
+                payloadToTry.patient_email = patientEmail;
                 delete payloadToTry.email;
               } else if (missingCol in payloadToTry) {
                 delete payloadToTry[missingCol];
@@ -210,13 +212,15 @@ export const createBooking = createServerFn({ method: "POST" })
       row = { id: `preview-${Date.now()}` };
     }
 
+    const normalizedEmail = data.email?.trim() || "";
+
     // 1. Immediately create the Google Calendar event right after saving the booking in Supabase
     try {
       const { createGoogleCalendarEvent } = await import("./googleCalendar.server");
       const calResult = await createGoogleCalendarEvent({
         bookingId: row.id,
         patientName: data.fullName,
-        patientEmail: data.email,
+        patientEmail: normalizedEmail,
         patientPhone: data.phone,
         serviceName: localizedServiceName,
         appointmentType: data.appointmentType,
@@ -243,13 +247,13 @@ export const createBooking = createServerFn({ method: "POST" })
       console.error("GOOGLE CALENDAR ERROR:", error);
     }
 
-    // 2. Send informational booking email via Resend
+    // 2. Send informational booking email via Resend (skips patient email if not provided, still notifies clinic)
     try {
       const { sendBookingEmails } = await import("./email.server");
       await sendBookingEmails({
         bookingId: row.id,
         patientName: data.fullName,
-        patientEmail: data.email,
+        patientEmail: normalizedEmail,
         patientPhone: data.phone,
         serviceName: localizedServiceName,
         canonicalServiceName: service.name,

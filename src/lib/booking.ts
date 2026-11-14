@@ -94,7 +94,14 @@ export const bookingSchema = z.object({
     .min(6, "Please enter a valid phone")
     .max(30)
     .regex(/^[+\d\s()-]+$/, "Invalid phone number"),
-  email: z.string().trim().email("Invalid email").max(255),
+  email: z
+    .string()
+    .trim()
+    .email("Invalid email")
+    .max(255)
+    .optional()
+    .or(z.literal(""))
+    .default(""),
   notes: z.string().trim().max(1000).optional().default(""),
   /** Language for patient notifications (email + SMS). Persisted as `preferred_language`. */
   preferredLanguage: z.enum(LOCALES).optional().default(DEFAULT_LOCALE),

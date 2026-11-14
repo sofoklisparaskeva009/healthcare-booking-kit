@@ -6,7 +6,7 @@ import { DEFAULT_LOCALE, intlLocaleTag, resolveLocale, type Locale } from "@/i18
 export interface BookingEmailData {
   bookingId: string;
   patientName: string;
-  patientEmail: string;
+  patientEmail?: string | null | undefined;
   patientPhone: string;
   serviceName: string;
   appointmentType: "gesy" | "private";
@@ -259,6 +259,8 @@ export function renderClinicNotificationEmail(data: BookingEmailData) {
   const isGesy = data.appointmentType === "gesy";
   const serviceName = data.canonicalServiceName ?? data.serviceName;
   const preferredLanguage = resolveLocale(data.locale ?? DEFAULT_LOCALE) === "en" ? "English" : "Ελληνικά (Greek)";
+  const trimmedEmail = data.patientEmail?.trim() || "";
+  const displayPatientEmail = trimmedEmail || "Δεν δηλώθηκε";
 
   const subject = `[New Booking] ${data.patientName} — ${serviceName} (${formattedDate})`;
 
@@ -271,7 +273,7 @@ Reference: #${data.bookingId}
 PATIENT DETAILS:
 - Name: ${data.patientName}
 - Phone: ${data.patientPhone}
-- Email: ${data.patientEmail}
+- Email: ${displayPatientEmail}
 - Preferred language: ${preferredLanguage}
 
 APPOINTMENT DETAILS:
@@ -333,7 +335,11 @@ Please log into your clinic dashboard or contact the patient if any adjustments 
                       <tr>
                         <td style="padding:4px 0;font-size:14px;color:#64748b;">Email</td>
                         <td style="padding:4px 0;font-size:14px;">
-                          <a href="mailto:${escapeHtml(data.patientEmail)}" style="color:#1e4338;text-decoration:none;">${escapeHtml(data.patientEmail)}</a>
+                          ${
+                            trimmedEmail
+                              ? `<a href="mailto:${escapeHtml(trimmedEmail)}" style="color:#1e4338;text-decoration:none;">${escapeHtml(trimmedEmail)}</a>`
+                              : `<span style="color:#64748b;">Δεν δηλώθηκε</span>`
+                          }
                         </td>
                       </tr>
                       <tr>

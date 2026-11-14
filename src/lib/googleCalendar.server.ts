@@ -3,7 +3,7 @@ import { clinicConfig } from "@/config/clinicConfig";
 export interface GoogleCalendarEventData {
   bookingId: string;
   patientName: string;
-  patientEmail: string;
+  patientEmail?: string | null | undefined;
   patientPhone: string;
   serviceName: string;
   appointmentType: "gesy" | "private";
@@ -220,10 +220,12 @@ export function formatEventDescription(data: GoogleCalendarEventData): string {
         : "Ιδιωτική Επίσκεψη (Private Visit)";
 
   const notesContent = data.notes && data.notes.trim() ? data.notes.trim() : "Κανένα σχόλιο";
+  const emailContent =
+    data.patientEmail && data.patientEmail.trim() ? data.patientEmail.trim() : "Δεν δηλώθηκε";
 
   return [
     `Τηλέφωνο: ${data.patientPhone}`,
-    `Email: ${data.patientEmail}`,
+    `Email: ${emailContent}`,
     `Γλώσσα προτίμησης: ${langLabel}`,
     `Σχόλια: ${notesContent}`,
     ``,
@@ -500,7 +502,9 @@ export async function createGoogleCalendarEvent(
         dateTime: times.endDateTime,
         timeZone: times.timeZone,
       },
-      attendees: [{ email: data.patientEmail, displayName: data.patientName }],
+      ...(data.patientEmail && data.patientEmail.trim()
+        ? { attendees: [{ email: data.patientEmail.trim(), displayName: data.patientName }] }
+        : {}),
     };
 
     const resolvedPrivateKey = (privateKey || credentials.privateKey).replace(/\\n/g, "\n");

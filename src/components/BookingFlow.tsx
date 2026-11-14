@@ -72,9 +72,13 @@ export function BookingFlow() {
   }, [dateStr]);
 
   const validateDetails = () => {
+    const normalizedForm = {
+      ...form,
+      email: form.email.trim(),
+    };
     const r = bookingSchema
       .pick({ fullName: true, phone: true, email: true, notes: true, preferredLanguage: true })
-      .safeParse(form);
+      .safeParse(normalizedForm);
     if (r.success) {
       setErrors({});
       return true;
@@ -425,7 +429,10 @@ export function BookingFlow() {
                 [t.booking.summary.time, time],
                 [t.booking.summary.patientName, form.fullName],
                 [t.booking.summary.phone, form.phone],
-                [t.booking.summary.email, form.email],
+                [
+                  t.booking.summary.email,
+                  form.email.trim() || (locale === "el" ? "Δεν δηλώθηκε" : "Not provided"),
+                ],
                 [
                   t.booking.summary.notificationLanguage,
                   `${t.language.names[form.preferredLanguage]} (${t.language.short[form.preferredLanguage]})`,

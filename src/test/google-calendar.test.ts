@@ -130,6 +130,14 @@ describe("Google Calendar Integration", () => {
       expect(description).toContain("Γλώσσα προτίμησης: English (EN)");
       expect(description).toContain("Σχόλια: Κανένα σχόλιο");
     });
+
+    it("formats event description with 'Email: Δεν δηλώθηκε' when patientEmail is omitted or empty", () => {
+      const description = formatEventDescription({
+        ...mockBookingData,
+        patientEmail: "",
+      });
+      expect(description).toContain("Email: Δεν δηλώθηκε");
+    });
   });
 
   describe("Slot Times and Duration Calculation", () => {
