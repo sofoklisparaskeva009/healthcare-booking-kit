@@ -259,7 +259,9 @@ export function renderClinicNotificationEmail(data: BookingEmailData) {
   const isGesy = data.appointmentType === "gesy";
   const serviceName = data.canonicalServiceName ?? data.serviceName;
   const preferredLanguage = resolveLocale(data.locale ?? DEFAULT_LOCALE) === "en" ? "English" : "Ελληνικά (Greek)";
-  const trimmedEmail = data.patientEmail?.trim() || "";
+  const rawEmail = typeof data.patientEmail === "string" ? data.patientEmail.trim() : "";
+  const trimmedEmail =
+    rawEmail && rawEmail.toLowerCase() !== "no-email@provided.com" ? rawEmail : "";
   const displayPatientEmail = trimmedEmail || "Δεν δηλώθηκε";
 
   const subject = `[New Booking] ${data.patientName} — ${serviceName} (${formattedDate})`;

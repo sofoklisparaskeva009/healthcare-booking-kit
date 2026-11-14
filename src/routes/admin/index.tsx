@@ -147,11 +147,11 @@ function AdminDashboard() {
       const query = search.toLowerCase().trim();
       const matchesSearch =
         !query ||
-        b.full_name.toLowerCase().includes(query) ||
-        b.phone.includes(query) ||
-        b.email.toLowerCase().includes(query) ||
-        b.service_name.toLowerCase().includes(query) ||
-        b.appointment_date.includes(query);
+        (b.full_name || "").toLowerCase().includes(query) ||
+        (b.phone || "").includes(query) ||
+        (b.email || "").toLowerCase().includes(query) ||
+        (b.service_name || "").toLowerCase().includes(query) ||
+        (b.appointment_date || "").includes(query);
 
       const matchesStatus = statusFilter === "all" || b.status === statusFilter;
       const matchesType = typeFilter === "all" || b.appointment_type === typeFilter;
@@ -359,13 +359,17 @@ function AdminDashboard() {
                                 <Phone className="h-3 w-3" /> {b.phone}
                               </a>
                             )}
-                            {b.email && (
+                            {b.email && b.email !== "no-email@provided.com" ? (
                               <a
                                 href={`mailto:${b.email}`}
                                 className="inline-flex items-center gap-1 hover:text-primary transition-colors truncate max-w-[200px]"
                               >
                                 <Mail className="h-3 w-3" /> {b.email}
                               </a>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground/60">
+                                <Mail className="h-3 w-3" /> Δεν δηλώθηκε
+                              </span>
                             )}
                           </div>
                           {b.notes && (

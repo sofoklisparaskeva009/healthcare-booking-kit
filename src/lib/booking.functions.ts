@@ -78,6 +78,11 @@ export const createBooking = createServerFn({ method: "POST" })
     const preferredLanguage = data.preferredLanguage;
     const localizedServiceName = getLocalizedServiceName(service.id, preferredLanguage);
 
+    const rawEmail = typeof data.email === "string" ? data.email.trim() : "";
+    const safeEmail = rawEmail || "no-email@provided.com";
+    const hasRealEmail =
+      Boolean(rawEmail) && rawEmail.toLowerCase() !== "no-email@provided.com";
+
     let row: { id: string };
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -85,8 +90,6 @@ export const createBooking = createServerFn({ method: "POST" })
       const candidateTables = ["booking_requests", "bookings"] as const;
       let insertedRow: { id: string } | null = null;
       let lastError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
-
-      const patientEmail = data.email?.trim() || "";
 
       tableLoop: for (const tableName of candidateTables) {
         const payloadToTry: Record<string, unknown> = {
@@ -98,7 +101,7 @@ export const createBooking = createServerFn({ method: "POST" })
           appointment_time: data.time,
           full_name: data.fullName,
           phone: data.phone,
-          email: patientEmail,
+          email: safeEmail,
           notes: data.notes || null,
           preferred_language: preferredLanguage,
         };
@@ -158,7 +161,7 @@ export const createBooking = createServerFn({ method: "POST" })
                 payloadToTry.phone = data.phone;
                 delete payloadToTry.patient_phone;
               } else if (missingCol === "email" && "email" in payloadToTry) {
-                payloadToTry.patient_email = patientEmail;
+                payloadToTry.patient_email = safeEmail;
                 delete payloadToTry.email;
               } else if (missingCol in payloadToTry) {
                 delete payloadToTry[missingCol];
@@ -212,7 +215,7 @@ export const createBooking = createServerFn({ method: "POST" })
       row = { id: `preview-${Date.now()}` };
     }
 
-    const normalizedEmail = data.email?.trim() || "";
+    const normalizedEmail = hasRealEmail ? rawEmail : null;
 
     // 1. Immediately create the Google Calendar event right after saving the booking in Supabase
     try {

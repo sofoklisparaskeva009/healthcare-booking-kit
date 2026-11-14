@@ -39,19 +39,25 @@ export async function sendBookingEmails(data: BookingEmailData) {
   const clinicRecipient = process.env["CLINIC_NOTIFICATION_EMAIL"] || clinicConfig.contact.email;
 
   const clinicTemplate = renderClinicNotificationEmail(data);
-  const trimmedPatientEmail = data.patientEmail?.trim() || "";
+  const rawPatientEmail =
+    typeof data.patientEmail === "string" ? data.patientEmail.trim() : "";
+  const hasValidPatientEmail =
+    Boolean(rawPatientEmail) && rawPatientEmail.toLowerCase() !== "no-email@provided.com";
 
   // Send both emails independently — a failure in one must not block the other.
   let patientEmailStatus: "sent" | "failed" | "skipped" = "skipped";
   let clinicEmailStatus: "sent" | "failed" = "failed";
 
-  if (trimmedPatientEmail) {
+  if (hasValidPatientEmail) {
     patientEmailStatus = "failed";
     try {
-      const patientTemplate = renderPatientConfirmationEmail(data);
+      const patientTemplate = renderPatientConfirmationEmail({
+        ...data,
+        patientEmail: rawPatientEmail,
+      });
       const patientResult = await resend.emails.send({
         from: fromEmail,
-        to: [trimmedPatientEmail],
+        to: [rawPatientEmail],
         subject: patientTemplate.subject,
         text: patientTemplate.text,
         html: patientTemplate.html,
@@ -63,7 +69,7 @@ export async function sendBookingEmails(data: BookingEmailData) {
         );
       } else {
         console.info(
-          `[Resend Email Service] ✅ Patient confirmation email sent (id: ${patientResult.data?.id}) to ${trimmedPatientEmail}`,
+          `[Resend Email Service] ✅ Patient confirmation email sent (id: ${patientResult.data?.id}) to ${rawPatientEmail}`,
         );
         patientEmailStatus = "sent";
       }

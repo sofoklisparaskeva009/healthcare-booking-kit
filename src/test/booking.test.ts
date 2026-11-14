@@ -49,13 +49,27 @@ describe("GeSY and private bookings", () => {
   it("uses an optional configured private rate", () => {
     expect(getBookingFee({ ...service, privateFee: 60 }, "private")).toBe(60);
   });
-  it("allows empty or omitted email while still requiring phone", () => {
+  it("allows empty, whitespace, null, or omitted email while still requiring phone", () => {
     const withEmptyEmail = bookingSchema.safeParse({
       ...input,
       appointmentType: "gesy",
       email: "",
     });
     expect(withEmptyEmail.success).toBe(true);
+
+    const withWhitespaceEmail = bookingSchema.safeParse({
+      ...input,
+      appointmentType: "gesy",
+      email: "   ",
+    });
+    expect(withWhitespaceEmail.success).toBe(true);
+
+    const withNullEmail = bookingSchema.safeParse({
+      ...input,
+      appointmentType: "gesy",
+      email: null,
+    });
+    expect(withNullEmail.success).toBe(true);
 
     const withOmittedEmail = bookingSchema.safeParse({
       serviceId: "initial",

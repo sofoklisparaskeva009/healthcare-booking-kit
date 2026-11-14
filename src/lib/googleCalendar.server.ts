@@ -220,8 +220,10 @@ export function formatEventDescription(data: GoogleCalendarEventData): string {
         : "Ιδιωτική Επίσκεψη (Private Visit)";
 
   const notesContent = data.notes && data.notes.trim() ? data.notes.trim() : "Κανένα σχόλιο";
-  const emailContent =
-    data.patientEmail && data.patientEmail.trim() ? data.patientEmail.trim() : "Δεν δηλώθηκε";
+  const rawEmail = typeof data.patientEmail === "string" ? data.patientEmail.trim() : "";
+  const hasRealEmail =
+    Boolean(rawEmail) && rawEmail.toLowerCase() !== "no-email@provided.com";
+  const emailContent = hasRealEmail ? rawEmail : "Δεν δηλώθηκε";
 
   return [
     `Τηλέφωνο: ${data.patientPhone}`,
@@ -490,6 +492,11 @@ export async function createGoogleCalendarEvent(
     const summary = formatEventSummary(data.patientName, data.serviceName);
     const description = formatEventDescription(data);
 
+    const rawPatientEmail =
+      typeof data.patientEmail === "string" ? data.patientEmail.trim() : "";
+    const hasValidPatientEmail =
+      Boolean(rawPatientEmail) && rawPatientEmail.toLowerCase() !== "no-email@provided.com";
+
     const eventPayload: Record<string, unknown> = {
       summary,
       description,
@@ -502,8 +509,8 @@ export async function createGoogleCalendarEvent(
         dateTime: times.endDateTime,
         timeZone: times.timeZone,
       },
-      ...(data.patientEmail && data.patientEmail.trim()
-        ? { attendees: [{ email: data.patientEmail.trim(), displayName: data.patientName }] }
+      ...(hasValidPatientEmail
+        ? { attendees: [{ email: rawPatientEmail, displayName: data.patientName }] }
         : {}),
     };
 
