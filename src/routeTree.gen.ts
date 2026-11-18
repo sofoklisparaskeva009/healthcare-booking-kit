@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as ApiCronRemindersRouteImport } from './routes/api/cron/reminders'
 import { Route as ApiMessagingWebhookRouteImport } from './routes/api/messaging/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/admin/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronRemindersRoute = ApiCronRemindersRouteImport.update({
+  id: '/api/cron/reminders',
+  path: '/api/cron/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMessagingWebhookRoute = ApiMessagingWebhookRouteImport.update({
   id: '/api/messaging/webhook',
   path: '/api/messaging/webhook',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/': typeof AdminIndexRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/messaging/webhook': typeof ApiMessagingWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin': typeof AdminIndexRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/messaging/webhook': typeof ApiMessagingWebhookRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,38 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/': typeof AdminIndexRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/messaging/webhook': typeof ApiMessagingWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin/login' | '/admin/' | '/api/messaging/webhook'
+  fullPaths:
+    | '/'
+    | '/admin/login'
+    | '/admin/'
+    | '/api/cron/reminders'
+    | '/api/messaging/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin/login' | '/admin' | '/api/messaging/webhook'
-  id: '__root__' | '/' | '/admin/login' | '/admin/' | '/api/messaging/webhook'
+  to:
+    | '/'
+    | '/admin/login'
+    | '/admin'
+    | '/api/cron/reminders'
+    | '/api/messaging/webhook'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin/login'
+    | '/admin/'
+    | '/api/cron/reminders'
+    | '/api/messaging/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  ApiCronRemindersRoute: typeof ApiCronRemindersRoute
   ApiMessagingWebhookRoute: typeof ApiMessagingWebhookRoute
 }
 
@@ -92,6 +118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/reminders': {
+      id: '/api/cron/reminders'
+      path: '/api/cron/reminders'
+      fullPath: '/api/cron/reminders'
+      preLoaderRoute: typeof ApiCronRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/messaging/webhook': {
       id: '/api/messaging/webhook'
       path: '/api/messaging/webhook'
@@ -106,6 +139,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminIndexRoute: AdminIndexRoute,
+  ApiCronRemindersRoute: ApiCronRemindersRoute,
   ApiMessagingWebhookRoute: ApiMessagingWebhookRoute,
 }
 export const routeTree = rootRouteImport
