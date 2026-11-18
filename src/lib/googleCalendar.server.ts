@@ -694,3 +694,262 @@ export async function createGoogleCalendarEvent(
     };
   }
 }
+
+export interface GoogleCalendarEventLookupOptions {
+  bookingId: string;
+  patientName: string;
+  serviceName: string;
+  appointmentDate: string; // YYYY-MM-DD
+  appointmentTime?: string | undefined; // HH:mm
+  patientEmail?: string | null | undefined;
+  patientPhone?: string | null | undefined;
+  calendarEventId?: string | null | undefined;
+}
+
+/**
+ * Locates an existing Google Calendar event for a booking, either by explicit `calendarEventId`
+ * or by searching events on the booking's `appointmentDate` matching the booking ID or patient name.
+ */
+export async function findGoogleCalendarEventId(
+  accessToken: string,
+  calendarId: string,
+  options: GoogleCalendarEventLookupOptions,
+): Promise<string | null> {
+  if (options.calendarEventId && options.calendarEventId.trim()) {
+    return options.calendarEventId.trim();
+  }
+
+  try {
+    // Search window covering the entire appointment date in UTC (+/- 1 day buffer for timezone offsets)
+    const [y, m, d] = options.appointmentDate.split("-").map(Number);
+    if (!y || !m || !d) return null;
+
+    const startWindow = new Date(Date.UTC(y, m - 1, d - 1, 0, 0, 0)).toISOString();
+    const endWindow = new Date(Date.UTC(y, m - 1, d + 1, 23, 59, 59)).toISOString();
+
+    const params = new URLSearchParams({
+      timeMin: startWindow,
+      timeMax: endWindow,
+      singleEvents: "true",
+      maxResults: "100",
+    });
+
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calendarId,
+    )}/events?${params.toString()}`;
+
+    const res = await fetch(listUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = (await res.json()) as {
+      items?: Array<{
+        id?: string;
+        summary?: string;
+        description?: string;
+        start?: { dateTime?: string; date?: string };
+      }>;
+    };
+
+    const items = data.items || [];
+    const normalizedName = options.patientName.trim().toLowerCase();
+    const normalizedPhone = options.patientPhone?.trim() || "";
+
+    // 1. Exact match by bookingId in description
+    const byBookingId = items.find(
+      (ev) => ev.id && ev.description && ev.description.includes(options.bookingId),
+    );
+    if (byBookingId?.id) return byBookingId.id;
+
+    // 2. Match by patient name in summary or description on the appointment date
+    const byPatient = items.find((ev) => {
+      if (!ev.id) return false;
+      const startStr = ev.start?.dateTime || ev.start?.date || "";
+      const sameDate = startStr.startsWith(options.appointmentDate);
+      const summaryMatch = (ev.summary || "").toLowerCase().includes(normalizedName);
+      const descMatch =
+        (ev.description || "").toLowerCase().includes(normalizedName) ||
+        (Boolean(normalizedPhone) && (ev.description || "").includes(normalizedPhone));
+      return sameDate && (summaryMatch || descMatch);
+    });
+
+    return byPatient?.id ?? null;
+  } catch (err) {
+    console.error("GOOGLE CALENDAR ERROR:", err);
+    return null;
+  }
+}
+
+/**
+ * Updates an existing Google Calendar event summary to `[ΕΠΙΒΕΒΑΙΩΜΕΝΟ] Ραντεβού: [Όνομα] - [Υπηρεσία]`
+ * when the patient confirms their attendance from `/manage-booking`.
+ */
+export async function confirmGoogleCalendarEvent(
+  options: GoogleCalendarEventLookupOptions,
+): Promise<GoogleCalendarResult> {
+  if (!isGoogleCalendarConfigured()) {
+    return { ok: true, skipped: true };
+  }
+
+  const credentials = getGoogleCalendarCredentials();
+  if (!credentials) {
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    const calendarId = sanitizeCalendarId(
+      process.env.GOOGLE_CALENDAR_ID?.trim() || credentials.calendarId?.trim(),
+    );
+    if (!calendarId) {
+      throw new Error(
+        "Google Calendar Pre-flight Validation Failed: calendarId (process.env.GOOGLE_CALENDAR_ID) is undefined or empty.",
+      );
+    }
+
+    const privateKey =
+      process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n") || credentials.privateKey;
+    const accessToken = await getGoogleAccessToken(
+      credentials.clientEmail,
+      privateKey,
+      GOOGLE_CALENDAR_SCOPES,
+    );
+
+    const eventId = await findGoogleCalendarEventId(accessToken, calendarId, options);
+    if (!eventId) {
+      console.warn(
+        `[Google Calendar Service] Could not locate calendar event to confirm for booking #${options.bookingId}`,
+      );
+      return { ok: false, error: "Calendar event not found for booking" };
+    }
+
+    const baseSummary = formatEventSummary(options.patientName, options.serviceName);
+    const confirmedSummary = baseSummary.startsWith("[ΕΠΙΒΕΒΑΙΩΜΕΝΟ]")
+      ? baseSummary
+      : `[ΕΠΙΒΕΒΑΙΩΜΕΝΟ] ${baseSummary}`;
+
+    const patchUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calendarId,
+    )}/events/${encodeURIComponent(eventId)}`;
+
+    console.log("--- GOOGLE CALENDAR DEBUG --- PATCH CONFIRM ID:", `[${calendarId}]`, `Event: [${eventId}]`);
+
+    const response = await fetch(patchUrl, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        summary: confirmedSummary,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      const apiErr = new Error(
+        `Google Calendar PATCH error (${response.status}) for event [${eventId}]: ${errText}`,
+      );
+      console.error("GOOGLE CALENDAR ERROR:", apiErr);
+      return { ok: false, error: apiErr.message };
+    }
+
+    const updated = (await response.json()) as { id?: string; htmlLink?: string };
+    return {
+      ok: true,
+      eventId: updated.id || eventId,
+      htmlLink: updated.htmlLink,
+    };
+  } catch (error) {
+    console.error("GOOGLE CALENDAR ERROR:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Deletes an existing Google Calendar event when the patient cancels their appointment
+ * from `/manage-booking`, freeing up the slot in Google Calendar.
+ */
+export async function deleteGoogleCalendarEvent(
+  options: GoogleCalendarEventLookupOptions,
+): Promise<GoogleCalendarResult> {
+  if (!isGoogleCalendarConfigured()) {
+    return { ok: true, skipped: true };
+  }
+
+  const credentials = getGoogleCalendarCredentials();
+  if (!credentials) {
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    const calendarId = sanitizeCalendarId(
+      process.env.GOOGLE_CALENDAR_ID?.trim() || credentials.calendarId?.trim(),
+    );
+    if (!calendarId) {
+      throw new Error(
+        "Google Calendar Pre-flight Validation Failed: calendarId (process.env.GOOGLE_CALENDAR_ID) is undefined or empty.",
+      );
+    }
+
+    const privateKey =
+      process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n") || credentials.privateKey;
+    const accessToken = await getGoogleAccessToken(
+      credentials.clientEmail,
+      privateKey,
+      GOOGLE_CALENDAR_SCOPES,
+    );
+
+    const eventId = await findGoogleCalendarEventId(accessToken, calendarId, options);
+    if (!eventId) {
+      console.warn(
+        `[Google Calendar Service] Could not locate calendar event to delete for booking #${options.bookingId}`,
+      );
+      return { ok: false, error: "Calendar event not found for booking" };
+    }
+
+    const deleteUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calendarId,
+    )}/events/${encodeURIComponent(eventId)}`;
+
+    console.log("--- GOOGLE CALENDAR DEBUG --- DELETE ID:", `[${calendarId}]`, `Event: [${eventId}]`);
+
+    const response = await fetch(deleteUrl, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    // 204 No Content, 200 OK, or 410 Gone all mean the event is deleted
+    if (!response.ok && response.status !== 410) {
+      const errText = await response.text();
+      const apiErr = new Error(
+        `Google Calendar DELETE error (${response.status}) for event [${eventId}]: ${errText}`,
+      );
+      console.error("GOOGLE CALENDAR ERROR:", apiErr);
+      return { ok: false, error: apiErr.message };
+    }
+
+    return {
+      ok: true,
+      eventId,
+    };
+  } catch (error) {
+    console.error("GOOGLE CALENDAR ERROR:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+

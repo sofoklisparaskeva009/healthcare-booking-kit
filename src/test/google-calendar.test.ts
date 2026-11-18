@@ -6,6 +6,8 @@ import {
   formatEventDescription,
   calculateEventTimes,
   createGoogleCalendarEvent,
+  confirmGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   resetCachedAccessToken,
   sanitizeCalendarId,
   GOOGLE_CALENDAR_SCOPES,
@@ -334,6 +336,107 @@ describe("Google Calendar Integration", () => {
       expect(result.ok).toBe(true);
       expect(result.eventId).toBe("fallback-event-123");
       expect(callCount).toBe(2);
+    });
+
+    it("updates event summary to '[ΕΠΙΒΕΒΑΙΩΜΕΝΟ] Ραντεβού: ...' on confirmGoogleCalendarEvent", async () => {
+      const { generateKeyPairSync } = await import("node:crypto");
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: "spki", format: "pem" },
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      });
+
+      process.env["GOOGLE_CLIENT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
+      process.env["GOOGLE_PRIVATE_KEY"] = privateKey;
+      process.env["GOOGLE_CALENDAR_ID"] = "clinic@group.calendar.google.com";
+
+      let patchedSummary = "";
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+        const urlStr = String(url);
+        if (urlStr.includes("oauth2.googleapis.com/token")) {
+          return new Response(JSON.stringify({ access_token: "mock-token", expires_in: 3600 }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (urlStr.includes("/events?timeMin=")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: "matched-ev-101",
+                  summary: "Ραντεβού: Andreas Ioannou - Initial Consultation",
+                  description: "Κωδικός Κράτησης: #test-booking-id-12345",
+                  start: { dateTime: "2026-11-10T10:00:00+02:00" },
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (urlStr.includes("/events/matched-ev-101") && init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body || "{}"));
+          patchedSummary = body.summary;
+          return new Response(JSON.stringify({ id: "matched-ev-101" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      });
+
+      const res = await confirmGoogleCalendarEvent({
+        bookingId: "test-booking-id-12345",
+        patientName: "Andreas Ioannou",
+        serviceName: "Initial Consultation",
+        appointmentDate: "2026-11-10",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(res.eventId).toBe("matched-ev-101");
+      expect(patchedSummary).toBe(
+        "[ΕΠΙΒΕΒΑΙΩΜΕΝΟ] Ραντεβού: Andreas Ioannou - Initial Consultation",
+      );
+    });
+
+    it("deletes calendar event on deleteGoogleCalendarEvent", async () => {
+      const { generateKeyPairSync } = await import("node:crypto");
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: "spki", format: "pem" },
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      });
+
+      process.env["GOOGLE_CLIENT_EMAIL"] = "bot@example.iam.gserviceaccount.com";
+      process.env["GOOGLE_PRIVATE_KEY"] = privateKey;
+      process.env["GOOGLE_CALENDAR_ID"] = "clinic@group.calendar.google.com";
+
+      let deleteCalled = false;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+        const urlStr = String(url);
+        if (urlStr.includes("oauth2.googleapis.com/token")) {
+          return new Response(JSON.stringify({ access_token: "mock-token", expires_in: 3600 }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (urlStr.includes("/events/explicit-ev-202") && init?.method === "DELETE") {
+          deleteCalled = true;
+          return new Response(null, { status: 204 });
+        }
+        return new Response("Not found", { status: 404 });
+      });
+
+      const res = await deleteGoogleCalendarEvent({
+        bookingId: "test-booking-id-12345",
+        patientName: "Andreas Ioannou",
+        serviceName: "Initial Consultation",
+        appointmentDate: "2026-11-10",
+        calendarEventId: "explicit-ev-202",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(deleteCalled).toBe(true);
     });
   });
 });

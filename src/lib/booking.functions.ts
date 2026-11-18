@@ -245,6 +245,19 @@ export const createBooking = createServerFn({ method: "POST" })
         console.info(
           `[createBooking] ✅ Google Calendar event created for booking #${row.id} (Event ID: ${calResult.eventId})`,
         );
+        if (calResult.eventId) {
+          try {
+            const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+            for (const table of ["booking_requests", "bookings"] as const) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabaseAdmin.from(table as any) as any)
+                .update({ calendar_event_id: calResult.eventId })
+                .eq("id", row.id);
+            }
+          } catch {
+            // Optional column calendar_event_id; lookup falls back to searching by bookingId/patientName
+          }
+        }
       }
     } catch (error) {
       console.error("GOOGLE CALENDAR ERROR:", error);
