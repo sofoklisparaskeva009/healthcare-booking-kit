@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic, getDefaultEmailFrom } from "@/config/clinic";
 import {
   renderClinicNotificationEmail,
   renderPatientConfirmationEmail,
@@ -34,9 +34,12 @@ export async function sendBookingEmails(data: BookingEmailData) {
     return { ok: true, skipped: true };
   }
 
-  const defaultFrom = `${clinicConfig.doctor.name} <onboarding@resend.dev>`;
+  const defaultFrom = getDefaultEmailFrom();
   const fromEmail = process.env["RESEND_FROM_EMAIL"] || defaultFrom;
-  const clinicRecipient = process.env["CLINIC_NOTIFICATION_EMAIL"] || clinicConfig.contact.email;
+  const clinicRecipient =
+    process.env["CLINIC_NOTIFICATION_EMAIL"] ||
+    clinic.notifications.adminNotificationEmail ||
+    clinic.contact.email;
 
   const clinicTemplate = renderClinicNotificationEmail(data);
   const rawPatientEmail =

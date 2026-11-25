@@ -1,5 +1,5 @@
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
 
@@ -13,9 +13,9 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 export function ContactSection() {
-  const { contact } = clinicConfig;
+  const { contact } = clinic;
   const { locale, t } = useLanguage();
-  const { workingHours, accessibilityNote } = getLocalizedClinic(locale);
+  const { workingHours, accessibilityNote, addressFull } = getLocalizedClinic(locale);
 
   return (
     <section id="contact" className="container mx-auto scroll-mt-16 px-6 py-24">
@@ -26,7 +26,7 @@ export function ContactSection() {
             <MapPin className="mt-1 h-5 w-5 shrink-0 text-gold" />
             <div>
               <p className="text-sm text-muted-foreground">{t.contact.address}</p>
-              <p className="font-medium text-foreground">{contact.address.full}</p>
+              <p className="font-medium text-foreground">{addressFull}</p>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic, getDefaultEmailFrom } from "@/config/clinic";
 import { DEFAULT_LOCALE, resolveLocale, type Locale } from "@/i18n/locales";
 import { getLocalizedServices, type AppointmentType } from "./booking";
 import { formatDateInTimeZone } from "./remindersCron.server";
@@ -95,8 +95,8 @@ function isBookingPastOrCancelled(row: RawManagedRow): boolean {
   if (row.status === "cancelled") {
     return true;
   }
-  const todayInCyprus = formatDateInTimeZone(new Date(), "Asia/Nicosia");
-  if (row.appointment_date && row.appointment_date < todayInCyprus) {
+  const todayInClinicTz = formatDateInTimeZone(new Date(), clinic.identity.timeZone);
+  if (row.appointment_date && row.appointment_date < todayInClinicTz) {
     return true;
   }
   return false;
@@ -178,8 +178,8 @@ async function sendAdminCancellationEmail(row: RawManagedRow): Promise<void> {
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(apiKey);
-    const { doctor, contact } = clinicConfig;
-    const defaultFrom = `${doctor.name} <onboarding@resend.dev>`;
+    const { contact } = clinic;
+    const defaultFrom = getDefaultEmailFrom();
     const fromEmail =
       process.env.RESEND_FROM_EMAIL?.trim() ||
       process.env["RESEND_FROM_EMAIL"]?.trim() ||
@@ -187,6 +187,7 @@ async function sendAdminCancellationEmail(row: RawManagedRow): Promise<void> {
     const clinicRecipient =
       process.env.CLINIC_NOTIFICATION_EMAIL?.trim() ||
       process.env["CLINIC_NOTIFICATION_EMAIL"]?.trim() ||
+      clinic.notifications.adminNotificationEmail ||
       contact.email;
 
     const displayEmail =

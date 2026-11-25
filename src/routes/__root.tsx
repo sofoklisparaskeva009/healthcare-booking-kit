@@ -12,7 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { clinicConfig } from "../config/clinicConfig";
+import { clinic } from "../config/clinic";
 import { LanguageProvider } from "../i18n/LanguageContext";
 import { DEFAULT_LOCALE } from "../i18n/locales";
 
@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: `${clinicConfig.doctor.name} — ${clinicConfig.doctor.specialty}` },
+      { title: `${clinic.doctor.name} — ${clinic.doctor.specialty}` },
       { name: "author", content: "Lovable" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

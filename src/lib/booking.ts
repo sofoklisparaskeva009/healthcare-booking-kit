@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/i18n/locales";
 
@@ -31,11 +31,12 @@ export type Service = {
 };
 
 /** Canonical (Greek) service list — used for validation, fees and DB persistence. */
-export const SERVICES: readonly Service[] = clinicConfig.services.map((s) => ({
+export const SERVICES: readonly Service[] = clinic.services.map((s) => ({
   id: s.id,
   name: s.title,
   desc: s.description,
   privateFee: s.privateFee,
+  duration: s.duration ?? clinic.identity.defaultAppointmentDurationMinutes,
   isGesyCovered: s.isGesyCovered,
 }));
 
@@ -78,7 +79,7 @@ export function getPricingLabel(
   return formatCoverageLabel(type, getBookingFee(service, type), locale);
 }
 
-export const TIME_SLOTS: readonly string[] = clinicConfig.timeSlots;
+export const TIME_SLOTS: readonly string[] = clinic.timeSlots;
 
 export const bookingSchema = z.object({
   appointmentType: z.enum(["gesy", "private"]),

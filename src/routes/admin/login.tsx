@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stethoscope, Lock, Mail, Loader2, ArrowLeft } from "lucide-react";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 
 export const ADMIN_TOKEN_KEY = "clinic.admin.access_token";
 export const ADMIN_EMAIL_KEY = "clinic.admin.email";
@@ -13,7 +13,7 @@ export const ADMIN_EMAIL_KEY = "clinic.admin.email";
 export const Route = createFileRoute("/admin/login")({
   head: () => ({
     meta: [
-      { title: `Σύνδεση Διαχειριστή — ${clinicConfig.doctor.name}` },
+      { title: `Σύνδεση Διαχειριστή — ${clinic.doctor.name}` },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -103,7 +103,7 @@ function AdminLogin() {
             Πίνακας Διαχείρισης
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {clinicConfig.doctor.name} · Σύνδεση με λογαριασμό διαχειριστή
+            {clinic.doctor.name} · Σύνδεση με λογαριασμό διαχειριστή
           </p>
         </div>
 

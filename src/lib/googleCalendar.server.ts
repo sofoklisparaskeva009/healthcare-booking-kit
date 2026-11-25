@@ -1,4 +1,4 @@
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 
 export interface GoogleCalendarEventData {
   bookingId: string;
@@ -184,9 +184,13 @@ export function getGoogleCalendarCredentials(): GoogleServiceAccountCredentials 
 
   const normalizedKey = normalizePrivateKey(privateKey);
 
-  const timeZone = process.env.GOOGLE_CALENDAR_TIMEZONE?.trim() || "Asia/Nicosia";
+  const timeZone =
+    process.env.GOOGLE_CALENDAR_TIMEZONE?.trim() || clinic.identity.timeZone;
   const rawDuration = Number(process.env.GOOGLE_CALENDAR_DEFAULT_DURATION_MINUTES);
-  const defaultDurationMinutes = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 60;
+  const defaultDurationMinutes =
+    Number.isFinite(rawDuration) && rawDuration > 0
+      ? rawDuration
+      : clinic.identity.defaultAppointmentDurationMinutes;
 
   return {
     clientEmail,
@@ -236,7 +240,7 @@ export function formatEventDescription(data: GoogleCalendarEventData): string {
     `Υπηρεσία: ${data.serviceName}`,
     `Κατηγορία: ${gesyStatus}`,
     `Κωδικός Κράτησης: #${data.bookingId}`,
-    `Τοποθεσία: ${clinicConfig.contact.address.full}`,
+    `Τοποθεσία: ${clinic.contact.address.full}`,
   ].join("\n");
 }
 
@@ -263,8 +267,8 @@ export function getTimezoneOffsetString(date: Date, timeZone: string): string {
 export function calculateEventTimes(
   dateStr: string,
   timeStr: string,
-  durationMinutes: number = 60,
-  timeZone: string = "Asia/Nicosia",
+  durationMinutes: number = clinic.identity.defaultAppointmentDurationMinutes,
+  timeZone: string = clinic.identity.timeZone,
 ) {
   const [hours, minutes] = timeStr.split(":").map((v) => Number.parseInt(v, 10));
   const totalStartMinutes = (hours || 0) * 60 + (minutes || 0);
@@ -500,7 +504,7 @@ export async function createGoogleCalendarEvent(
     const eventPayload: Record<string, unknown> = {
       summary,
       description,
-      location: clinicConfig.contact.address.full,
+      location: clinic.contact.address.full,
       start: {
         dateTime: times.startDateTime,
         timeZone: times.timeZone,

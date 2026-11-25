@@ -12,7 +12,7 @@ import {
   Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic, getClinicDoctorName } from "@/config/clinic";
 import { intlLocaleTag, type Locale } from "@/i18n/locales";
 import {
   getBookingByActionToken,
@@ -197,12 +197,12 @@ function ManageBookingPage() {
             been cancelled or passed.
           </p>
           <div className="mt-6 border-t border-border pt-5 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground">{clinicConfig.doctor.name}</p>
+            <p className="font-semibold text-foreground">{clinic.doctor.name}</p>
             <a
-              href={clinicConfig.contact.phoneHref}
+              href={clinic.contact.phoneHref}
               className="mt-1 inline-flex items-center gap-1.5 text-primary font-semibold hover:underline"
             >
-              <Phone className="h-3.5 w-3.5" /> {clinicConfig.contact.phone}
+              <Phone className="h-3.5 w-3.5" /> {clinic.contact.phone}
             </a>
           </div>
           <Button asChild variant="outline" className="mt-6 w-full h-11">
@@ -225,7 +225,7 @@ function ManageBookingPage() {
           <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
             <Stethoscope className="h-6 w-6" />
           </div>
-          <h1 className="font-display text-xl font-bold">{clinicConfig.doctor.name}</h1>
+          <h1 className="font-display text-xl font-bold">{getClinicDoctorName(locale)}</h1>
           <p className="mt-1 text-xs uppercase tracking-widest text-gold font-semibold">
             {t.pageTitle}
           </p>
@@ -363,10 +363,10 @@ function ManageBookingPage() {
               <div className="mt-6 border-t border-border pt-4 text-center text-xs text-muted-foreground">
                 {t.contactPrompt}{" "}
                 <a
-                  href={clinicConfig.contact.phoneHref}
+                  href={clinic.contact.phoneHref}
                   className="font-semibold text-primary hover:underline"
                 >
-                  {clinicConfig.contact.phone}
+                  {clinic.contact.phone}
                 </a>
               </div>
             </>

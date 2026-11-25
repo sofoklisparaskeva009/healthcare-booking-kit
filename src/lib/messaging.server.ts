@@ -1,4 +1,4 @@
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic, getSmsSignature } from "@/config/clinic";
 import { formatCoverageLabel } from "@/lib/booking";
 import { intlLocaleTag, resolveLocale, type Locale } from "@/i18n/locales";
 
@@ -69,7 +69,10 @@ function cleanEnv(val: string | undefined): string | undefined {
  * - If Cyprus 8-digit mobile/landline (e.g. 99xxxxxx), prepends +357 default country code.
  * - Ensures the final number starts with '+'.
  */
-export function normalizePhoneNumber(rawPhone: string, defaultCountryCode = "+357"): string {
+export function normalizePhoneNumber(
+  rawPhone: string,
+  defaultCountryCode = clinic.identity.defaultCountryCode,
+): string {
   if (!rawPhone) return "";
   let cleaned = rawPhone.trim().replace(/[\s\-()[\].]/g, "");
 
@@ -284,14 +287,14 @@ export function renderBookingConfirmationMessage(
   data: MessagingBookingData,
 ): RenderedMessage {
   const locale: MessageLocale = resolveLocale(data.locale);
-  const { doctor } = clinicConfig;
+  const signature = getSmsSignature(locale);
   const shortDate = formatShortDate(data.appointmentDate, locale);
   const coverageLabel = formatCoverageLabel(data.appointmentType, data.privateFee, locale);
 
   if (locale === "el") {
     const dateTimeLabel = `${shortDate} στις ${data.appointmentTime}`;
     const body = [
-      `📋 ${doctor.name}`,
+      `📋 ${signature}`,
       ``,
       `Αγαπητέ/ή ${data.patientName},`,
       `Το ραντεβού σας καταχωρήθηκε επιτυχώς για τις ${dateTimeLabel}. Θα λάβετε νέο μήνυμα υπενθύμισης 48 ώρες πριν το ραντεβού.`,
@@ -310,7 +313,7 @@ export function renderBookingConfirmationMessage(
   // English fallback
   const dateTimeLabel = `${shortDate} at ${data.appointmentTime}`;
   const body = [
-    `📋 ${doctor.name}`,
+    `📋 ${signature}`,
     ``,
     `Dear ${data.patientName},`,
     `Your appointment has been successfully booked for ${dateTimeLabel}. You will receive a reminder message 48 hours prior.`,
@@ -333,13 +336,13 @@ export function renderReminderMessage(
   data: MessagingBookingData,
 ): RenderedMessage {
   const locale: MessageLocale = resolveLocale(data.locale);
-  const { doctor } = clinicConfig;
+  const signature = getSmsSignature(locale);
   const shortDate = formatShortDate(data.appointmentDate, locale);
   const urls = buildConfirmationUrls(data.bookingId, locale);
 
   if (locale === "el") {
     const body = [
-      `⏰ *Υπενθύμιση Ραντεβού — ${doctor.name}*`,
+      `⏰ *Υπενθύμιση Ραντεβού — ${signature}*`,
       ``,
       `Αγαπητέ/ή ${data.patientName},`,
       `Σας υπενθυμίζουμε το αυριανό σας ραντεβού:`,
@@ -355,7 +358,7 @@ export function renderReminderMessage(
   }
 
   const body = [
-    `⏰ *Appointment Reminder — ${doctor.name}*`,
+    `⏰ *Appointment Reminder — ${signature}*`,
     ``,
     `Dear ${data.patientName},`,
     `This is a reminder for your appointment tomorrow:`,

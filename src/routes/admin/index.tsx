@@ -7,7 +7,7 @@ import {
   type AdminBooking,
 } from "@/lib/admin.functions";
 import { ADMIN_TOKEN_KEY, ADMIN_EMAIL_KEY } from "./login";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,7 +32,7 @@ import {
 export const Route = createFileRoute("/admin/")({
   head: () => ({
     meta: [
-      { title: `Διαχείριση Ραντεβού — ${clinicConfig.doctor.name}` },
+      { title: `Διαχείριση Ραντεβού — ${clinic.doctor.name}` },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -195,7 +195,7 @@ function AdminDashboard() {
                   Admin
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">{clinicConfig.doctor.name}</p>
+              <p className="text-xs text-muted-foreground">{clinic.doctor.name}</p>
             </div>
           </div>
 

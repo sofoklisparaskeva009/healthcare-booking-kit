@@ -1,4 +1,9 @@
-import { clinicConfig } from "@/config/clinicConfig";
+import {
+  clinic,
+  getClinicAddress,
+  getClinicDoctorName,
+  getEmailSignature,
+} from "@/config/clinic";
 import { formatCoverageLabel, getAppointmentTypeLabel } from "@/lib/booking";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
 import { DEFAULT_LOCALE, intlLocaleTag, resolveLocale, type Locale } from "@/i18n/locales";
@@ -113,7 +118,10 @@ const PATIENT_EMAIL_STRINGS = {
 export function renderPatientConfirmationEmail(data: BookingEmailData) {
   const locale = resolveLocale(data.locale ?? DEFAULT_LOCALE);
   const s = PATIENT_EMAIL_STRINGS[locale];
-  const { doctor, contact } = clinicConfig;
+  const { contact } = clinic;
+  const doctorName = getClinicDoctorName(locale);
+  const emailSignature = getEmailSignature(locale);
+  const addressFull = getClinicAddress(locale);
   const specialty = getLocalizedClinic(locale).specialty;
   const formattedDate = formatDate(data.appointmentDate, locale);
   const dateTimeLabel =
@@ -125,7 +133,7 @@ export function renderPatientConfirmationEmail(data: BookingEmailData) {
   const categoryLabel = getAppointmentTypeLabel(data.appointmentType, locale);
   const ref = data.bookingId.slice(0, 8);
 
-  const subject = s.subject(doctor.name);
+  const subject = s.subject(doctorName);
 
   const text = `
 ${s.greeting(data.patientName)}
@@ -134,7 +142,7 @@ ${s.introText(dateTimeLabel)}
 
 ${s.summaryHeading}
 -------------------
-${s.doctor}: ${doctor.name} (${specialty})
+${s.doctor}: ${doctorName} (${specialty})
 ${s.service}: ${data.serviceName}
 ${s.category}: ${categoryLabel}
 ${s.date}: ${formattedDate}
@@ -144,14 +152,14 @@ ${s.reference}: #${ref}
 
 ${s.locationHeading.toUpperCase()}
 ---------------
-${s.address}: ${contact.address.full}
+${s.address}: ${addressFull}
 ${s.phone}: ${contact.phone}
 ${s.email}: ${contact.email}
 
 ${isGesy ? `${s.gesyNoteTitle.toUpperCase()}:\n${s.gesyNote}` : `${s.prepTitle}:\n${s.prepNote}`}
 
 ${s.signOff}
-${doctor.name}
+${emailSignature}
 ${contact.phone} | ${contact.email}
 `.trim();
 
@@ -177,7 +185,7 @@ ${contact.phone} | ${contact.email}
           <!-- Header -->
           <tr>
             <td style="background-color:#1e4338;padding:36px 32px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">${doctor.name}</h1>
+              <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">${doctorName}</h1>
               <p style="margin:6px 0 0;font-size:14px;color:#d4af37;text-transform:uppercase;letter-spacing:0.12em;font-weight:600;">${specialty}</p>
             </td>
           </tr>
@@ -188,7 +196,7 @@ ${contact.phone} | ${contact.email}
               <h2 style="margin:0 0 16px;font-size:20px;color:#0f172a;font-weight:600;">${s.heading}</h2>
               <p style="margin:0 0 24px;font-size:15px;color:#475569;">
                 ${s.greeting(`<strong>${escapeHtml(data.patientName)}</strong>`)}<br>
-                ${s.introHtml(doctor.name, escapeHtml(dateTimeLabel))}
+                ${s.introHtml(doctorName, escapeHtml(dateTimeLabel))}
               </p>
 
               <!-- Appointment Card -->
@@ -223,7 +231,7 @@ ${contact.phone} | ${contact.email}
               <!-- Clinic Info -->
               <h3 style="margin:0 0 12px;font-size:15px;color:#0f172a;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">${s.locationHeading}</h3>
               <p style="margin:0 0 6px;font-size:14px;color:#475569;">
-                <strong>${s.address}:</strong> ${contact.address.full}
+                <strong>${s.address}:</strong> ${addressFull}
               </p>
               <p style="margin:0 0 6px;font-size:14px;color:#475569;">
                 <strong>${s.phone}:</strong> <a href="${contact.phoneHref}" style="color:#1e4338;text-decoration:none;font-weight:600;">${contact.phone}</a>
@@ -238,7 +246,7 @@ ${contact.phone} | ${contact.email}
           <tr>
             <td style="background-color:#f1f5f9;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
               <p style="margin:0;font-size:12px;color:#64748b;">
-                © ${new Date().getFullYear()} ${doctor.name}. ${s.rights}
+                © ${new Date().getFullYear()} ${emailSignature}. ${s.rights}
               </p>
             </td>
           </tr>
@@ -254,7 +262,7 @@ ${contact.phone} | ${contact.email}
 }
 
 export function renderClinicNotificationEmail(data: BookingEmailData) {
-  const { doctor, contact } = clinicConfig;
+  const { doctor, contact } = clinic;
   const formattedDate = formatDate(data.appointmentDate);
   const isGesy = data.appointmentType === "gesy";
   const serviceName = data.canonicalServiceName ?? data.serviceName;

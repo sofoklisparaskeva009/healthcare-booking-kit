@@ -1,6 +1,6 @@
 import { Globe, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clinicConfig } from "@/config/clinicConfig";
+import { getLocalizedClinic } from "@/i18n/clinicContent";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { LOCALES } from "@/i18n/locales";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ onBookClick }: NavbarProps) {
-  const { doctor } = clinicConfig;
   const { locale, setLocale, t } = useLanguage();
-  const brandName = doctor.logoTitle || doctor.name.replace(/^(Dr\.|Δρ\.)\s*/i, "");
+  const brandName = getLocalizedClinic(locale).logoTitle;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">

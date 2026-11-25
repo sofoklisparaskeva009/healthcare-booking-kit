@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic, getDefaultEmailFrom, getEmailSignature } from "@/config/clinic";
 import { DEFAULT_LOCALE, intlLocaleTag, resolveLocale, type Locale } from "@/i18n/locales";
 import { sendSms } from "./messaging.server";
 
@@ -46,7 +46,10 @@ export interface CronRemindersResult {
 /**
  * Formats a Date object as YYYY-MM-DD in a given IANA timezone (defaults to Asia/Nicosia).
  */
-export function formatDateInTimeZone(date: Date, timeZone = "Asia/Nicosia"): string {
+export function formatDateInTimeZone(
+  date: Date,
+  timeZone = clinic.identity.timeZone,
+): string {
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone,
@@ -156,8 +159,9 @@ async function sendReminderEmail(options: {
   }
 
   const resend = new Resend(apiKey);
-  const { doctor, contact } = clinicConfig;
-  const defaultFrom = `${doctor.name} <onboarding@resend.dev>`;
+  const { contact } = clinic;
+  const emailSignature = getEmailSignature(options.locale);
+  const defaultFrom = getDefaultEmailFrom();
   const fromEmail =
     process.env.RESEND_FROM_EMAIL?.trim() ||
     process.env["RESEND_FROM_EMAIL"]?.trim() ||
@@ -172,8 +176,8 @@ async function sendReminderEmail(options: {
 
   const isEl = options.locale === "el";
   const subject = isEl
-    ? `Υπενθύμιση Ραντεβού — ${doctor.name}`
-    : `Appointment Reminder — ${doctor.name}`;
+    ? `Υπενθύμιση Ραντεβού — ${emailSignature}`
+    : `Appointment Reminder — ${emailSignature}`;
   const greeting = isEl
     ? `Αγαπητέ/ή ${options.patientName},`
     : `Dear ${options.patientName},`;
@@ -181,7 +185,7 @@ async function sendReminderEmail(options: {
     ? "Επιβεβαίωση ή Ακύρωση Ραντεβού"
     : "Confirm or Cancel Appointment";
 
-  const text = `${greeting}\n\n${messageText}\n\n${doctor.name}\n${contact.phone}`;
+  const text = `${greeting}\n\n${messageText}\n\n${emailSignature}\n${contact.phone}`;
 
   const html = `
 <!DOCTYPE html>
@@ -198,7 +202,7 @@ async function sendReminderEmail(options: {
         <table role="presentation" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
           <tr>
             <td style="background-color:#1e4338;padding:28px 32px;text-align:center;">
-              <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">${doctor.name}</h1>
+              <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">${emailSignature}</h1>
             </td>
           </tr>
           <tr>
@@ -211,7 +215,7 @@ async function sendReminderEmail(options: {
                 </a>
               </div>
               <p style="margin:24px 0 0;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:16px;">
-                ${doctor.name} · ${contact.phone}
+                ${emailSignature} · ${contact.phone}
               </p>
             </td>
           </tr>
@@ -281,9 +285,9 @@ export async function handleRemindersCron(request: Request): Promise<CronReminde
     const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
     const in72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
 
-    // Target dates in Cyprus timezone for the 48h to 72h ("μεθαύριο") window
-    const targetDateStart = formatDateInTimeZone(in48h, "Asia/Nicosia");
-    const targetDateEnd = formatDateInTimeZone(in72h, "Asia/Nicosia");
+    // Target dates in clinic's configured timezone for the 48h to 72h ("μεθαύριο") window
+    const targetDateStart = formatDateInTimeZone(in48h, clinic.identity.timeZone);
+    const targetDateEnd = formatDateInTimeZone(in72h, clinic.identity.timeZone);
 
     const candidateTables = ["booking_requests", "bookings"] as const;
     const seenIds = new Set<string>();

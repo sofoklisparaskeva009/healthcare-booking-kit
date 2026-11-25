@@ -1,9 +1,7 @@
-import { clinicConfig } from "@/config/clinicConfig";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
 
 export function AboutSection() {
-  const { doctor } = clinicConfig;
   const { locale, t } = useLanguage();
   const c = getLocalizedClinic(locale);
 
@@ -16,7 +14,7 @@ export function AboutSection() {
           </p>
           <h2 className="mt-3 font-display text-4xl md:text-5xl">{t.sections.aboutTitle}</h2>
           <p className="mt-4 text-sm text-primary-foreground/70">
-            {doctor.name} · {c.specialty}
+            {c.doctorName} · {c.specialty}
           </p>
         </div>
         <div className="space-y-5 text-lg text-primary-foreground/80">

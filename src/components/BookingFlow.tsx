@@ -18,7 +18,7 @@ import {
   type AppointmentType,
 } from "@/lib/booking";
 import { createBooking, getBookedSlots, type CreateBookingErrorCode } from "@/lib/booking.functions";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
 import { LOCALES, type Locale } from "@/i18n/locales";
@@ -163,7 +163,7 @@ export function BookingFlow() {
         <p className="mx-auto mt-3 max-w-md text-muted-foreground">
           {t.booking.success.body({
             firstName,
-            doctor: clinicConfig.doctor.name,
+            doctor: localizedClinic.doctorName,
             service: service.name,
             category: categoryLabel,
             date: formattedDate,
@@ -210,7 +210,7 @@ export function BookingFlow() {
                 <legend className="text-sm font-medium text-foreground">
                   {t.booking.categoryLegend}
                 </legend>
-                {clinicConfig.gesy.isProvider && (
+                {clinic.gesy.isProvider && (
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <Info className="h-3.5 w-3.5 text-primary" /> {localizedClinic.gesy.subText}
                   </span>
@@ -422,7 +422,7 @@ export function BookingFlow() {
             <h4 className="font-display text-2xl text-foreground">{t.booking.summary.title}</h4>
             <dl className="mt-6 divide-y divide-border">
               {[
-                [t.booking.summary.doctor, clinicConfig.doctor.name],
+                [t.booking.summary.doctor, localizedClinic.doctorName],
                 [t.booking.summary.category, getAppointmentTypeLabel(appointmentType, locale)],
                 [t.booking.summary.service, service.name],
                 [t.booking.summary.date, format(date, "EEEE, d MMMM yyyy", { locale: dateLocale })],

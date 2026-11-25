@@ -1,6 +1,6 @@
 import { Award, CalendarCheck, ShieldCheck, Star, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { GesyLogo } from "@/components/GesyLogo";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { getLocalizedClinic } from "@/i18n/clinicContent";
@@ -17,7 +17,7 @@ const BADGE_ICONS = {
 };
 
 export function HeroSection({ onBookClick }: HeroSectionProps) {
-  const { doctor, gesy } = clinicConfig;
+  const { doctor, gesy } = clinic;
   const { locale, t } = useLanguage();
   const c = getLocalizedClinic(locale);
 

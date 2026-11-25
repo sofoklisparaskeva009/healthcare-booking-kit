@@ -8,19 +8,19 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { FaqSection } from "@/components/FaqSection";
 import { ContactSection } from "@/components/ContactSection";
 import { Footer } from "@/components/Footer";
-import { clinicConfig } from "@/config/clinicConfig";
+import { clinic } from "@/config/clinic";
 import { useLanguage } from "@/i18n/LanguageContext";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: `${clinicConfig.doctor.name} — ${clinicConfig.doctor.specialty}` },
-      { name: "description", content: clinicConfig.doctor.heroDescription },
+      { title: `${clinic.doctor.name} — ${clinic.doctor.specialty}` },
+      { name: "description", content: clinic.doctor.heroDescription },
       {
         property: "og:title",
-        content: `${clinicConfig.doctor.name} — ${clinicConfig.doctor.specialty}`,
+        content: `${clinic.doctor.name} — ${clinic.doctor.specialty}`,
       },
-      { property: "og:description", content: clinicConfig.doctor.heroDescription },
+      { property: "og:description", content: clinic.doctor.heroDescription },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
